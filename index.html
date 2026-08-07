@@ -180,15 +180,19 @@ footer{text-align:center;font-size:8pt;color:#999;padding:16px;border-top:1px so
       <thead><tr>
         <th>SKU Code</th><th>Description</th><th>Brand</th>
         <th class="num">QLD Cartons</th><th class="num">NSW Cartons</th>
-        <th class="num">Total Cartons</th><th class="num">Total Units</th>
+        <th class="num">Total Cartons</th>
+        <th class="num" style="color:#ffaaaa">Committed (SOs)</th>
+        <th class="num" style="color:#aaffcc">Net Available</th>
+        <th class="num">Total Units</th>
         <th>As At</th><th>Notes</th><th>Action</th>
       </tr></thead>
-      <tbody id="stock-tbody"><tr><td colspan="10" class="loading"><span class="spin"></span>Loading…</td></tr></tbody>
+      <tbody id="stock-tbody"><tr><td colspan="12" class="loading"><span class="spin"></span>Loading…</td></tr></tbody>
       <tfoot><tr>
         <td colspan="3"><strong>TOTAL</strong></td>
         <td class="num" id="soh-tot-qld">—</td>
         <td class="num" id="soh-tot-nsw">—</td>
         <td class="num" id="soh-tot-nat">—</td>
+        <td colspan="2"></td>
         <td class="num" id="soh-tot-units">—</td>
         <td colspan="3"></td>
       </tr></tfoot>
@@ -600,24 +604,28 @@ function getCoverClass(wks){
 
 // ═══ PLAN FORECASTING ══════════════════════════════════════════════════════
 function buildForecast(){
-  // Returns: {[sku_code]: {weekly_cartons, by_retailer:{retailer: weekly_cartons}}}
+  // Returns: {[sku_code]: {weekly_cartons, by_retailer:{retailer: weekly_cartons}, from_default: bool}}
   const out={};
   const now=new Date();
   const cutoff=new Date(now);cutoff.setFullYear(cutoff.getFullYear()-1);
   SKUS.forEach(sku=>{
     const hist=SALES_HIST.filter(h=>h.sku_code===sku.code&&new Date(h.week_date)>=cutoff);
+    if(hist.length===0){
+      // Fall back to SKU-level default (derived from recent SO patterns + 10% growth)
+      const base=(sku.default_weekly_cartons||0)*GROWTH;
+      out[sku.code]={weekly_cartons:base,by_retailer:{},from_default:true};
+      return;
+    }
     const retailers=[...new Set(hist.map(h=>h.retailer))];
     const totalCartons=hist.reduce((s,h)=>s+(h.cartons_sold||0),0);
-    const weeks=Math.max(hist.length/Math.max(retailers.length,1),1);
     const avgWeekly=(totalCartons/52)*GROWTH;
     const byRetailer={};
     retailers.forEach(ret=>{
       const retHist=hist.filter(h=>h.retailer===ret);
       const retTotal=retHist.reduce((s,h)=>s+(h.cartons_sold||0),0);
-      const retWeekly=(retTotal/52)*GROWTH;
-      byRetailer[ret]=retWeekly;
+      byRetailer[ret]=(retTotal/52)*GROWTH;
     });
-    out[sku.code]={weekly_cartons:avgWeekly,by_retailer:byRetailer};
+    out[sku.code]={weekly_cartons:avgWeekly,by_retailer:byRetailer,from_default:false};
   });
   return out;
 }
@@ -646,14 +654,19 @@ function getPOArrivals(sku_code, weekIso){
 
 // ═══ RENDER PLAN ═══════════════════════════════════════════════════════════
 function setStateView(view, btn){
+  const afterSplit=new Date()>=new Date(STATE_SPLIT_DATE);
+  // QLD stock not held until Sept 2026 — block early selection
+  if(view==='qld'&&!afterSplit){
+    showBanner('QLD stock split activates 1 September 2026. All stock is currently held in NSW.','info');
+    return;
+  }
   STATE_VIEW=view;
   document.querySelectorAll('.state-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  const afterSplit=new Date()>=new Date(STATE_SPLIT_DATE);
   document.getElementById('state-mode-lbl').textContent=
-    view==='national'?'National view':
-    view==='qld'?(afterSplit?'QLD view':'QLD view (pre-split — Sept 2026)'):
-    (afterSplit?'NSW view':'NSW view (pre-split — Sept 2026)');
+    view==='national'?'National view (all stock in NSW until Sept 2026)':
+    view==='qld'?'QLD view':
+    'NSW / National view';
   renderPlan();
 }
 
@@ -663,17 +676,20 @@ function renderPlan(){
   const skus=SKUS.filter(s=>brandF==='all'||s.brand===brandF);
   const fcast=buildForecast();
 
-  // Tiles
-  let totalCrit=0,totalWarn=0,totalOk=0,orderNow=0;
+  // Tiles — use net available (SOH minus committed) for cover calculation
+  let totalCrit=0,totalWarn=0,totalOk=0,orderNow=0,totalShort=0;
   skus.forEach(sku=>{
     const soh=getSoh(sku.code);
-    let stock=STATE_VIEW==='qld'?soh.cartons_qld:STATE_VIEW==='nsw'?soh.cartons_nsw:(soh.cartons_qld+soh.cartons_nsw);
+    const grossStock=STATE_VIEW==='qld'?soh.cartons_qld:STATE_VIEW==='nsw'?soh.cartons_nsw:(soh.cartons_qld+soh.cartons_nsw);
+    const committed=soh.committed_cartons||0;
+    const netAvail=grossStock-committed;
     const wkly=(fcast[sku.code]?.weekly_cartons||0);
-    const cover=wkly>0?stock/wkly:99;
-    if(cover<6)totalCrit++;else if(cover<12)totalWarn++;else totalOk++;
-    // Check if order window is open: projected stock at lead_max_wks from now < safety stock
+    const cover=wkly>0?netAvail/wkly:99;
+    if(netAvail<0)totalShort++;
+    else if(cover<6)totalCrit++;else if(cover<12)totalWarn++;else totalOk++;
+    // Order window: project from net available
     const sku_lead=sku.lead_max_wks||16;
-    let proj=stock;
+    let proj=Math.max(0,netAvail);
     for(let w=0;w<sku_lead;w++){
       const wkIso=isoDate(addWeeks(monday(),w));
       const demand=(fcast[sku.code]?.weekly_cartons||0)+getPromoUplift(sku.code,wkIso);
@@ -681,12 +697,13 @@ function renderPlan(){
       proj-=demand;
     }
     const projCover=wkly>0?proj/wkly:99;
-    if(projCover<sku.safety_wks||6)orderNow++;
+    if(projCover<(sku.safety_wks||SAFETY_DEFAULT))orderNow++;
   });
   document.getElementById('plan-tiles').innerHTML=`
-    <div class="tile red"><div class="tile-lbl">Critical &lt;6 wks</div><div class="tile-val">${totalCrit}</div><div class="tile-sub">SKUs needing urgent action</div></div>
+    <div class="tile red"><div class="tile-lbl">Stock Shortfall NOW</div><div class="tile-val">${totalShort}</div><div class="tile-sub">SOH less than open sales orders</div></div>
+    <div class="tile red"><div class="tile-lbl">Critical &lt;6 wks</div><div class="tile-val">${totalCrit}</div><div class="tile-sub">Net available &lt; 6 weeks cover</div></div>
     <div class="tile amber"><div class="tile-lbl">Warning 6–12 wks</div><div class="tile-val">${totalWarn}</div><div class="tile-sub">Monitor closely</div></div>
-    <div class="tile green"><div class="tile-lbl">OK ≥12 wks</div><div class="tile-val">${totalOk}</div><div class="tile-sub">Adequate stock</div></div>
+    <div class="tile green"><div class="tile-lbl">OK ≥12 wks</div><div class="tile-val">${totalOk}</div><div class="tile-sub">Adequate net stock</div></div>
     <div class="tile amber"><div class="tile-lbl">Order Window Open</div><div class="tile-val">${orderNow}</div><div class="tile-sub">Place PO within lead time</div></div>
   `;
 
@@ -702,36 +719,36 @@ function renderPlan(){
 
   let html=`<table class="grid-tbl"><thead><tr>
     <th style="width:130px;text-align:left">SKU</th>
-    <th style="width:90px;text-align:left">Metric</th>
+    <th style="width:115px;text-align:left">Metric</th>
     ${wkCols.map(w=>`<th class="wk-hdr">${w.lbl}</th>`).join('')}
     <th style="background:#2c3e66">Order Alert</th>
   </tr></thead><tbody>`;
 
   skus.forEach(sku=>{
     const soh=getSoh(sku.code);
-    let openStock=STATE_VIEW==='qld'?soh.cartons_qld:STATE_VIEW==='nsw'?soh.cartons_nsw:(soh.cartons_qld+soh.cartons_nsw);
+    const grossStock=STATE_VIEW==='qld'?soh.cartons_qld:STATE_VIEW==='nsw'?soh.cartons_nsw:(soh.cartons_qld+soh.cartons_nsw);
+    const committed=soh.committed_cartons||0;
+    const netAvail=grossStock-committed;
+    const isShort=netAvail<0;
     const wklyFcast=fcast[sku.code]?.weekly_cartons||0;
+    const fromDefault=fcast[sku.code]?.from_default||false;
     const sku_lead=sku.lead_max_wks||16;
     const sku_safety=sku.safety_wks||SAFETY_DEFAULT;
 
-    // Calculate week-by-week projection
+    // Week-by-week projection starts from net available (after deducting committed SOs)
     const wkData=[];
-    let running=openStock;
+    let running=netAvail; // can start negative if short
     let orderNowFlag=false;
-    let orderByWk=null;
 
     wkCols.forEach((wk,i)=>{
       const promo=getPromoUplift(sku.code,wk.iso);
       const demand=wklyFcast+promo;
       const arrivals=getPOArrivals(sku.code,wk.iso);
       running=running+arrivals-demand;
-      if(running<0)running=0;
       const cover=wklyFcast>0?running/wklyFcast:99;
 
-      // Flag order window: if projected stock at i+lead_max drops below safety
-      let reorder=false;
       if(i===0){
-        let projected=running;
+        let projected=Math.max(0,running);
         for(let j=1;j<=sku_lead&&i+j<weeks;j++){
           const fwk=wkCols[i+j];
           const fd=(fcast[sku.code]?.weekly_cartons||0)+getPromoUplift(sku.code,fwk.iso);
@@ -742,25 +759,41 @@ function renderPlan(){
         if(projCover<sku_safety){orderNowFlag=true;}
       }
 
-      wkData.push({demand,arrivals,closing:running,cover,reorder:false,hasPromo:promo>0});
+      wkData.push({demand,arrivals,closing:running,cover,hasPromo:promo>0});
     });
 
-    // Build 4-row block per SKU
+    // SKU header row
     html+=`<tr><td class="sku-lbl" colspan="${weeks+3}" style="color:#fff;font-size:9pt">
       <strong>${sku.code}</strong> &nbsp; ${sku.description}
       &nbsp; <span style="font-size:8pt;background:#0E7CCE;padding:1px 7px;border-radius:10px">${sku.brand}</span>
-      ${orderNowFlag?'&nbsp;<span style="background:#E67E22;color:#fff;font-size:8pt;padding:2px 8px;border-radius:10px">⚠ ORDER NOW — window open</span>':''}
+      ${isShort?'&nbsp;<span style="background:#C0392B;color:#fff;font-size:8pt;padding:2px 8px;border-radius:10px">&#9888; STOCK SHORTFALL — Open SOs exceed SOH</span>':''}
+      ${(!isShort&&orderNowFlag)?'&nbsp;<span style="background:#E67E22;color:#fff;font-size:8pt;padding:2px 8px;border-radius:10px">&#9888; ORDER NOW — window open</span>':''}
+      ${fromDefault?'&nbsp;<span style="background:#555;color:#ccc;font-size:7.5pt;padding:1px 6px;border-radius:10px">est. rate</span>':''}
+    </td></tr>`;
+
+    // Row 0: SOH position (gross / committed / net)
+    html+=`<tr style="background:#fdf3f3">
+      <td></td>
+      <td class="row-lbl" style="color:#C0392B;font-weight:bold">SOH position</td>`;
+    // Only show in first week col, span rest
+    html+=`<td class="num" colspan="${weeks}" style="font-size:8pt;color:#444;text-align:left;padding-left:10px">
+      Gross SOH: <strong>${n(grossStock)}</strong> cartons &nbsp;|&nbsp;
+      Committed (open SOs): <strong style="color:${committed>0?'#C0392B':'#555'}">${n(committed)}</strong> cartons &nbsp;|&nbsp;
+      Net available: <strong style="color:${isShort?'#C0392B':'#27AE60'}">${isShort?'('+n(Math.abs(netAvail))+') SHORTFALL':n(netAvail)}</strong> cartons
+    </td>
+    <td rowspan="5" style="background:#f0f0f0;text-align:center;vertical-align:middle;font-size:8pt">
+      ${isShort?`<span style="color:var(--red);font-weight:bold">&#9888; SHORT<br>${n(Math.abs(netAvail))} ctns<br>unfulfilled</span>`:
+        orderNowFlag?`<span style="color:var(--amber);font-weight:bold">&#9888; PLACE ORDER<br>Lead: ${sku_lead} wks</span>`:
+        '<span style="color:var(--green)">OK</span>'}
     </td></tr>`;
 
     // Row 1: Forecast demand
-    html+=`<tr><td style="background:#f7f7f7" rowspan="1"></td><td class="row-lbl" style="color:#555">Forecast demand</td>`;
+    html+=`<tr><td></td><td class="row-lbl" style="color:#555">Forecast demand${fromDefault?' <em style="color:#999;font-size:7pt">(est)</em>':''}</td>`;
     wkData.forEach(w=>{
       const hasPr=w.hasPromo;
-      html+=`<td class="num ${hasPr?'promo-week':''}" style="color:${hasPr?'#7c5000':'#666'}">${n(w.demand,1)}</td>`;
+      html+=`<td class="num ${hasPr?'promo-week':''}" style="color:${hasPr?'#7c5000':'#666'}">${wklyFcast>0?n(w.demand,1):'—'}</td>`;
     });
-    html+=`<td rowspan="4" style="background:#f0f0f0;text-align:center;vertical-align:middle;font-size:8pt">
-      ${orderNowFlag?`<span style="color:var(--amber);font-weight:bold">⚠ PLACE ORDER<br>Lead: ${sku_lead} wks</span>`:'<span style="color:var(--green)">OK</span>'}
-    </td></tr>`;
+    html+='</tr>';
 
     // Row 2: PO arrivals
     html+=`<tr><td></td><td class="row-lbl" style="color:#0E7CCE">PO arrivals</td>`;
@@ -769,16 +802,19 @@ function renderPlan(){
     });
     html+='</tr>';
 
-    // Row 3: Closing stock
-    html+=`<tr><td></td><td class="row-lbl">Closing stock</td>`;
-    wkData.forEach(w=>{html+=`<td class="num">${n(w.closing)}</td>`;});
+    // Row 3: Closing stock (can be negative — show in red)
+    html+=`<tr><td></td><td class="row-lbl">Projected stock</td>`;
+    wkData.forEach(w=>{
+      const neg=w.closing<0;
+      html+=`<td class="num" style="${neg?'color:#C0392B;font-weight:bold':''}">${neg?'('+n(Math.abs(w.closing))+')':n(w.closing)}</td>`;
+    });
     html+='</tr>';
 
     // Row 4: Weeks cover (colour coded)
     html+=`<tr><td></td><td class="row-lbl" style="font-weight:bold">Weeks cover</td>`;
     wkData.forEach(w=>{
-      const cls=getCoverClass(w.cover);
-      const cv=w.cover>=99?'∞':n(w.cover,1);
+      const cls=w.closing<0?'wk-cell cov-zero':getCoverClass(w.cover);
+      const cv=w.closing<0?'SHORT':w.cover>=99?'∞':n(w.cover,1);
       html+=`<td class="${cls}">${cv}</td>`;
     });
     html+='</tr>';
@@ -790,25 +826,30 @@ function renderPlan(){
 
 // ═══ RENDER STOCK ══════════════════════════════════════════════════════════
 function renderStock(){
-  let html='';let totQld=0,totNsw=0,totUnits=0;
+  let html='';let totQld=0,totNsw=0,totUnits=0,totCommitted=0;
   SKUS.forEach(sku=>{
     const soh=getSoh(sku.code);
     const nat=(soh.cartons_qld||0)+(soh.cartons_nsw||0);
+    const committed=soh.committed_cartons||0;
+    const netAvail=nat-committed;
     const units=nat*(sku.carton_units||6);
-    totQld+=soh.cartons_qld||0;totNsw+=soh.cartons_nsw||0;totUnits+=units;
-    html+=`<tr>
+    const isShort=netAvail<0;
+    totQld+=soh.cartons_qld||0;totNsw+=soh.cartons_nsw||0;totUnits+=units;totCommitted+=committed;
+    html+=`<tr style="${isShort?'background:#fdecea':''}">
       <td>${sku.code}</td><td>${sku.description}</td>
       <td><span class="badge ${sku.brand==='Oatly'?'badge-ok':'badge-warn'}">${sku.brand}</span></td>
       <td class="num">${n(soh.cartons_qld)}</td>
       <td class="num">${n(soh.cartons_nsw)}</td>
       <td class="num"><strong>${n(nat)}</strong></td>
+      <td class="num" style="color:${committed>0?'#C0392B':'#999'}">${committed>0?n(committed):'—'}</td>
+      <td class="num" style="color:${isShort?'#C0392B':'#27AE60'};font-weight:bold">${isShort?'('+n(Math.abs(netAvail))+')':n(netAvail)}</td>
       <td class="num">${n(units)}</td>
       <td>${fmtDate(soh.as_at_date)}</td>
       <td style="font-size:8pt;color:#888">${soh.notes||''}</td>
       <td><button class="btn btn-grey" style="font-size:8pt;padding:3px 8px" onclick="editSoh('${sku.code}')">Edit</button></td>
     </tr>`;
   });
-  document.getElementById('stock-tbody').innerHTML=html||'<tr><td colspan="10" style="padding:20px;color:#888;text-align:center">No stock data. Add via Setup.</td></tr>';
+  document.getElementById('stock-tbody').innerHTML=html||'<tr><td colspan="12" style="padding:20px;color:#888;text-align:center">No stock data. Add via Setup.</td></tr>';
   document.getElementById('soh-tot-qld').textContent=n(totQld);
   document.getElementById('soh-tot-nsw').textContent=n(totNsw);
   document.getElementById('soh-tot-nat').textContent=n(totQld+totNsw);
