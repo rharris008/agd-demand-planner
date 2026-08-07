@@ -660,24 +660,50 @@ function buildAlerts(){
     const sku_safety=sku.safety_wks||SAFETY_DEFAULT;
     const cover=wkly>0?netAvail/wkly:null;
 
-    // CRITICAL: can't fulfil current SOs
+    // Recommended PO quantity: stock needed to reach safety cover after lead time
+    function recoPO(){
+      if(!wkly) return null;
+      let inbound=0;
+      for(let i=0;i<sku_lead;i++) inbound+=getPOArrivals(sku.code,isoDate(addWeeks(monday(),i)));
+      const needed=Math.ceil((sku_lead+sku_safety)*wkly);
+      const have=Math.max(0,netAvail)+inbound;
+      const reco=Math.max(0,needed-have);
+      return reco>0?Math.ceil(reco/50)*50:0; // round up to nearest 50 ctns
+    }
+
+    // CRITICAL: shortfall — committed SOs exceed SOH (includes backordered units)
     if(netAvail<0){
+      const reco=recoPO();
       alerts.critical.push({
         sku:sku.code,desc:sku.description,
-        title:'Stock Shortfall — Cannot Fulfil Open Orders',
-        detail:`SOH ${n(grossNat)} cartons / Committed ${n(committed)} cartons / Shortfall ${n(Math.abs(netAvail))} cartons`,
-        action:'Source stock urgently or negotiate delivery phasing with customers',
+        title:'Stock Shortfall — Committed Orders Exceed SOH',
+        detail:`SOH ${n(grossNat)} cartons / Committed+Backorder ${n(committed)} cartons / Shortfall ${n(Math.abs(netAvail))} cartons`
+          +(reco?` / Recommended PO: <strong>${n(reco)} cartons</strong>`:''),
+        action:'Source stock urgently — contact Oatly EMEA. Negotiate delivery phasing with customers for backorders.',
         sev:'critical'
       });
     }
     // CRITICAL: < 6 weeks net cover
     else if(wkly>0&&cover<6){
+      const reco=recoPO();
       alerts.critical.push({
         sku:sku.code,desc:sku.description,
         title:'Critical Stock Level — Under 6 Weeks Cover',
-        detail:`Net available: ${n(netAvail)} cartons / Weekly demand: ${n(wkly,1)} cartons / Cover: ${n(cover,1)} weeks`,
+        detail:`Net available: ${n(netAvail)} cartons / Weekly demand: ${n(wkly,1)} cartons / Cover: ${n(cover,1)} weeks`
+          +(reco?` / Recommended PO: <strong>${n(reco)} cartons</strong>`:''),
         action:`Place PO immediately — lead time ${sku_lead} weeks`,
         sev:'critical'
+      });
+    }
+
+    // INFO: PerfectTed — no sales history, flag for Richard input
+    if(sku.brand==='PerfectTed'&&wkly===0){
+      alerts.info.push({
+        sku:sku.code,desc:sku.description,
+        title:'No Sales History — Forecast Not Available',
+        detail:'PerfectTed SKU has no fulfillment history in NS. Weekly demand rate is unknown.',
+        action:'Provide actual weekly sales volume to Richard so forecast can be seeded.',
+        sev:'info'
       });
     }
 
@@ -706,10 +732,12 @@ function buildAlerts(){
       });
       const projCover=wkly>0?proj/wkly:null;
       if(projCover!==null&&projCover<sku_safety&&cover!==null&&cover>=6){
+        const reco=recoPO();
         alerts.warning.push({
           sku:sku.code,desc:sku.description,
           title:'Order Window Open — Place PO Now',
-          detail:`Projected stock in ${sku_lead} weeks: ${n(proj)} cartons (${n(projCover,1)} wks cover) — safety target ${sku_safety} wks`,
+          detail:`Projected stock in ${sku_lead} weeks: ${n(proj)} cartons (${n(projCover,1)} wks cover) — safety target ${sku_safety} wks`
+            +(reco?` / Recommended PO: <strong>${n(reco)} cartons</strong>`:''),
           action:`Place PO this week — minimum ${sku_lead} weeks before projected stockout`,
           sev:'warning'
         });
@@ -1363,7 +1391,10 @@ function renderForecast(){
     ${wkCols.map(()=>'<td></td>').join('')}
   </tr></tfoot></table>`;
 
-  document.getElementById('fcast-grid-wrap').innerHTML=`<div style="overflow-x:auto">${html}</div>`;
+  const srcLabel=`<div style="margin-bottom:8px;padding:6px 10px;background:#f0f4ff;border-left:3px solid #0E7CCE;font-size:8.5pt;color:#555">
+    <strong>Source:</strong> NS outbound dispatch data (ItemShip fulfillments, subsidiary 46) — synced daily at 06:00. Forecast = prior 52-week actuals &times; 1.10 growth. PerfectTed SKUs have no dispatch history.
+  </div>`;
+  document.getElementById('fcast-grid-wrap').innerHTML=srcLabel+`<div style="overflow-x:auto">${html}</div>`;
 
   // Tiles
   const histSkus=[...new Set(SALES_HIST.map(h=>h.sku_code))];
