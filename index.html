@@ -107,6 +107,35 @@ select,input[type=text],input[type=date],input[type=number]{font-family:Arial,sa
 /* Retailer colour bands */
 .ret-coles{border-left:3px solid #CC0000}.ret-ww{border-left:3px solid #007D32}.ret-other{border-left:3px solid #888}
 footer{text-align:center;font-size:8pt;color:#999;padding:16px;border-top:1px solid var(--mdgrey);background:var(--white);margin-top:24px}
+/* Sticky plan bar */
+.sticky-plan-bar{position:sticky;z-index:90;background:var(--ltgrey);border-bottom:1px solid var(--mdgrey)}
+/* Alert badge on tab */
+.tab-badge{display:inline-block;background:var(--red);color:#fff;font-size:7pt;font-weight:bold;border-radius:8px;padding:1px 6px;margin-left:5px;vertical-align:middle;line-height:1.5}
+.tab-badge.warn{background:var(--amber)}.tab-badge.ok{background:var(--green)}
+/* Alert strip (compact, on plan tab) */
+.alert-strip{margin:0 20px 8px;display:flex;flex-direction:column;gap:4px}
+.alert-strip-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:4px;font-size:8.5pt;background:var(--white);border-left:4px solid var(--red)}
+.alert-strip-row.warn{border-left-color:var(--amber)}
+.alert-strip-row.info{border-left-color:var(--blue)}
+.alert-strip-row .a-sku{font-weight:bold;min-width:90px;color:var(--navy)}
+.alert-strip-row .a-msg{flex:1;color:#444}
+.alert-strip-row .a-act{font-size:7.5pt;color:var(--blue);text-decoration:underline;cursor:pointer;white-space:nowrap}
+.alert-strip-hdr{padding:6px 20px 2px;font-size:9pt;font-weight:bold;color:var(--navy);display:flex;align-items:center;gap:8px}
+/* Alerts tab */
+.alerts-wrap{padding:16px 20px}
+.alert-group-hdr{font-size:11pt;font-weight:bold;padding:10px 0 6px;display:flex;align-items:center;gap:8px;border-bottom:2px solid var(--mdgrey);margin-bottom:6px;margin-top:14px}
+.alert-group-hdr:first-child{margin-top:0}
+.alert-card{background:var(--white);border-radius:6px;border-left:5px solid var(--red);padding:12px 16px;margin-bottom:6px;display:flex;align-items:flex-start;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.alert-card.warn{border-left-color:var(--amber)}.alert-card.info{border-left-color:var(--blue)}.alert-card.ok{border-left-color:var(--green)}
+.alert-dot{width:10px;height:10px;border-radius:50%;background:var(--red);flex-shrink:0;margin-top:4px}
+.alert-dot.warn{background:var(--amber)}.alert-dot.info{background:var(--blue)}.alert-dot.ok{background:var(--green)}
+.alert-body{flex:1}
+.alert-title{font-size:9.5pt;font-weight:bold;color:var(--dktext);margin-bottom:3px}
+.alert-detail{font-size:8.5pt;color:#555;margin-bottom:4px}
+.alert-action{font-size:8pt;font-weight:bold;color:var(--blue)}
+.alert-sku{font-size:8pt;color:#888;margin-top:2px}
+.alert-ts{font-size:7.5pt;color:#aaa;margin-left:auto;white-space:nowrap;padding-top:2px}
+.no-alerts{text-align:center;padding:40px;color:#888;font-size:11pt}
 </style>
 </head>
 <body>
@@ -127,6 +156,7 @@ footer{text-align:center;font-size:8pt;color:#999;padding:16px;border-top:1px so
 
 <div class="tabs">
   <button class="tab active" onclick="showTab('plan',this)">Planning Grid</button>
+  <button class="tab" onclick="showTab('alerts',this)">Alerts <span id="alert-badge" class="tab-badge" style="display:none">0</span></button>
   <button class="tab" onclick="showTab('stock',this)">Stock on Hand</button>
   <button class="tab" onclick="showTab('po',this)">Inbound Containers</button>
   <button class="tab" onclick="showTab('forecast',this)">Retailer Forecast</button>
@@ -141,32 +171,45 @@ footer{text-align:center;font-size:8pt;color:#999;padding:16px;border-top:1px so
 
 <!-- ═══ TAB 1: PLANNING GRID ═══════════════════════════════════════════════ -->
 <div id="pane-plan" class="pane active">
-  <div class="filter-bar">
-    <label>Brand: <select id="plan-brand" onchange="renderPlan()">
-      <option value="all">All</option>
-      <option value="Oatly">Oatly</option>
-      <option value="PerfectTed">Perfect Ted</option>
-    </select></label>
-    <label>Weeks: <select id="plan-weeks" onchange="renderPlan()">
-      <option value="13">13 weeks</option>
-      <option value="26" selected>26 weeks</option>
-    </select></label>
-    <div class="state-toggle">
-      <span style="font-size:9pt;color:#666">View:</span>
-      <button class="state-btn active" onclick="setStateView('national',this)" id="sv-nat">National</button>
-      <button class="state-btn" onclick="setStateView('nsw',this)" id="sv-nsw">NSW</button>
-      <button class="state-btn" onclick="setStateView('qld',this)" id="sv-qld">QLD</button>
+
+  <div class="sticky-plan-bar" id="sticky-plan-bar">
+    <div class="filter-bar" style="border-bottom:none">
+      <label>Brand: <select id="plan-brand" onchange="renderPlan()">
+        <option value="all">All</option>
+        <option value="Oatly">Oatly</option>
+        <option value="PerfectTed">Perfect Ted</option>
+      </select></label>
+      <label>Weeks: <select id="plan-weeks" onchange="renderPlan()">
+        <option value="13">13 weeks</option>
+        <option value="26" selected>26 weeks</option>
+      </select></label>
+      <div class="state-toggle">
+        <span style="font-size:9pt;color:#666">View:</span>
+        <button class="state-btn active" onclick="setStateView('national',this)" id="sv-nat">National</button>
+        <button class="state-btn" onclick="setStateView('nsw',this)" id="sv-nsw">NSW</button>
+        <button class="state-btn" onclick="setStateView('qld',this)" id="sv-qld">QLD</button>
+      </div>
+      <button class="btn btn-blue" onclick="loadAll()"><span class="spin" id="plan-spin" style="display:none"></span>Refresh</button>
+      <span style="font-size:8pt;color:#999;margin-left:4px">Green ≥12 wks | Amber 6–11 wks | Red &lt;6 wks</span>
     </div>
-    <button class="btn btn-blue" onclick="loadAll()"><span class="spin" id="plan-spin" style="display:none"></span>Refresh</button>
-    <span style="font-size:8pt;color:#999;margin-left:4px">Green ≥12 wks | Amber 6-11 wks | Red &lt;6 wks | <span style="background:#fff3cd;padding:1px 5px;border-radius:3px">⚠ Order window open</span></span>
+    <div class="tiles" id="plan-tiles" style="padding-top:8px;padding-bottom:8px"><div class="loading"><span class="spin"></span>Loading…</div></div>
   </div>
 
-  <div class="tiles" id="plan-tiles"><div class="loading"><span class="spin"></span>Loading…</div></div>
+  <div id="plan-alert-strip" style="margin-top:8px"></div>
 
-  <div class="sec-hdr">26-Week Rolling Stock Projection</div>
+  <div class="sec-hdr" style="margin-top:4px">26-Week Rolling Stock Projection</div>
   <div class="grid-wrap">
     <div id="plan-grid"><div class="loading"><span class="spin"></span>Building plan…</div></div>
   </div>
+</div>
+
+<!-- ═══ TAB 2: ALERTS ══════════════════════════════════════════════════════ -->
+<div id="pane-alerts" class="pane">
+  <div class="filter-bar">
+    <span style="font-size:9pt;font-weight:bold;color:var(--navy)">All active alerts — as at last data refresh</span>
+    <button class="btn btn-blue" style="margin-left:auto" onclick="loadAll()">Refresh Data</button>
+  </div>
+  <div class="alerts-wrap" id="alerts-content"><div class="loading"><span class="spin"></span>Loading…</div></div>
 </div>
 
 <!-- ═══ TAB 2: STOCK ON HAND ════════════════════════════════════════════════ -->
@@ -555,11 +598,205 @@ function populateSelects(){
 
 function renderAll(){
   renderPlan();
+  renderAlerts();
   renderStock();
   renderPO();
   renderForecast();
   renderPromo();
   renderSkuMaster();
+}
+
+// ═══ ALERTS ENGINE ═════════════════════════════════════════════════════════
+function buildAlerts(){
+  const fcast=buildForecast();
+  const today=new Date();
+  const alerts={critical:[],warning:[],info:[]};
+
+  SKUS.forEach(sku=>{
+    const soh=getSoh(sku.code);
+    const grossNat=(soh.cartons_qld||0)+(soh.cartons_nsw||0);
+    const committed=soh.committed_cartons||0;
+    const netAvail=grossNat-committed;
+    const wkly=fcast[sku.code]?.weekly_cartons||0;
+    const fromDefault=fcast[sku.code]?.from_default||false;
+    const sku_lead=sku.lead_max_wks||16;
+    const sku_safety=sku.safety_wks||SAFETY_DEFAULT;
+    const cover=wkly>0?netAvail/wkly:99;
+
+    // CRITICAL: can't fulfil current SOs
+    if(netAvail<0){
+      alerts.critical.push({
+        sku:sku.code,desc:sku.description,
+        title:'Stock Shortfall — Cannot Fulfil Open Orders',
+        detail:`SOH ${n(grossNat)} cartons / Committed ${n(committed)} cartons / Shortfall ${n(Math.abs(netAvail))} cartons`,
+        action:'Source stock urgently or negotiate delivery phasing with customers',
+        sev:'critical'
+      });
+    }
+    // CRITICAL: < 6 weeks net cover
+    else if(wkly>0&&cover<6){
+      alerts.critical.push({
+        sku:sku.code,desc:sku.description,
+        title:'Critical Stock Level — Under 6 Weeks Cover',
+        detail:`Net available: ${n(netAvail)} cartons / Weekly demand: ${n(wkly,1)} cartons / Cover: ${n(cover,1)} weeks`,
+        action:`Place PO immediately — lead time ${sku_lead} weeks`,
+        sev:'critical'
+      });
+    }
+
+    // Check PO overdue: ETA passed but not Arrived
+    POS.filter(p=>p.sku_code===sku.code&&p.status!=='Arrived'&&p.status!=='Cancelled'&&p.eta_date).forEach(po=>{
+      const eta=new Date(po.eta_date);
+      const weeksLate=Math.round((today-eta)/(7*86400000));
+      if(weeksLate>0){
+        alerts.critical.push({
+          sku:sku.code,desc:sku.description,
+          title:'PO Overdue — Not Yet Arrived',
+          detail:`PO ${po.po_number} — ETA was ${fmtDate(po.eta_date)} (${weeksLate} wk${weeksLate!==1?'s':''} overdue) — ${n((po.cartons_qld||0)+(po.cartons_nsw||0))} cartons`,
+          action:'Chase supplier/freight forwarder for ETA update',
+          sev:'critical'
+        });
+      }
+    });
+
+    // WARNING: order window open (projected stock at lead_max below safety)
+    if(netAvail>=0){
+      let proj=Math.max(0,netAvail);
+      const wkCols=[];
+      for(let i=0;i<sku_lead;i++) wkCols.push(isoDate(addWeeks(monday(),i)));
+      wkCols.forEach(wkIso=>{
+        proj=Math.max(0,proj+getPOArrivals(sku.code,wkIso)-(wkly+getPromoUplift(sku.code,wkIso)));
+      });
+      const projCover=wkly>0?proj/wkly:99;
+      if(projCover<sku_safety&&cover>=6){
+        alerts.warning.push({
+          sku:sku.code,desc:sku.description,
+          title:'Order Window Open — Place PO Now',
+          detail:`Projected stock in ${sku_lead} weeks: ${n(proj)} cartons (${n(projCover,1)} wks cover) — safety target ${sku_safety} wks`,
+          action:`Place PO this week — minimum ${sku_lead} weeks before projected stockout`,
+          sev:'warning'
+        });
+      }
+      // WARNING: 6–12 weeks cover
+      else if(wkly>0&&cover>=6&&cover<12){
+        alerts.warning.push({
+          sku:sku.code,desc:sku.description,
+          title:'Low Stock — 6 to 12 Weeks Cover',
+          detail:`Net available: ${n(netAvail)} cartons / Cover: ${n(cover,1)} weeks`,
+          action:'Monitor weekly and initiate PO if no inbound stock expected',
+          sev:'warning'
+        });
+      }
+    }
+
+    // INFO: PO arriving within 14 days
+    POS.filter(p=>p.sku_code===sku.code&&p.status!=='Arrived'&&p.status!=='Cancelled'&&p.eta_date).forEach(po=>{
+      const eta=new Date(po.eta_date);
+      const daysOut=Math.round((eta-today)/86400000);
+      if(daysOut>=0&&daysOut<=14){
+        alerts.info.push({
+          sku:sku.code,desc:sku.description,
+          title:`PO Due in ${daysOut} Day${daysOut!==1?'s':''}`,
+          detail:`PO ${po.po_number} — ETA ${fmtDate(po.eta_date)} — ${n((po.cartons_qld||0)+(po.cartons_nsw||0))} cartons`,
+          action:'Prepare receiving — update status to Arrived once receipted',
+          sev:'info'
+        });
+      }
+    });
+
+    // INFO: forecast estimated (no actual sales history)
+    if(fromDefault&&wkly>0){
+      alerts.info.push({
+        sku:sku.code,desc:sku.description,
+        title:'Forecast Using Estimated Rate',
+        detail:`Weekly demand set to ${n(wkly,1)} cartons (derived from open SO patterns ×10% growth). No actual sales history entered.`,
+        action:'Enter 52 weeks of actual sales via the Retailer Forecast → Sales History tab for accuracy',
+        sev:'info'
+      });
+    }
+  });
+
+  return alerts;
+}
+
+function renderAlerts(){
+  const alerts=buildAlerts();
+  const totalCrit=alerts.critical.length;
+  const totalWarn=alerts.warning.length;
+  const total=totalCrit+totalWarn+alerts.info.length;
+
+  // Update badge
+  const badge=document.getElementById('alert-badge');
+  const urgentCount=totalCrit+totalWarn;
+  badge.style.display=urgentCount>0?'inline-block':'none';
+  badge.textContent=urgentCount;
+  badge.className='tab-badge'+(urgentCount>0&&totalCrit>0?'':urgentCount>0?' warn':' ok');
+
+  if(total===0){
+    document.getElementById('alerts-content').innerHTML=`<div class="no-alerts">&#10003; No active alerts — all SKUs within acceptable parameters.</div>`;
+    return;
+  }
+
+  let html='';
+
+  const renderGroup=(list,label,cls,dotCls)=>{
+    if(!list.length)return;
+    html+=`<div class="alert-group-hdr"><span style="width:12px;height:12px;border-radius:50%;background:var(--${cls==='critical'?'red':cls==='warning'?'amber':'blue'});display:inline-block"></span>${label} (${list.length})</div>`;
+    list.forEach(a=>{
+      html+=`<div class="alert-card ${cls==='warning'?'warn':cls==='info'?'info':''}">
+        <div class="alert-dot ${cls==='warning'?'warn':cls==='info'?'info':''}"></div>
+        <div class="alert-body">
+          <div class="alert-title">${a.title}</div>
+          <div class="alert-detail">${a.detail}</div>
+          <div class="alert-action">&#8594; ${a.action}</div>
+          <div class="alert-sku">${a.sku} &mdash; ${a.desc}</div>
+        </div>
+      </div>`;
+    });
+  };
+
+  renderGroup(alerts.critical,'CRITICAL',  'critical');
+  renderGroup(alerts.warning, 'WARNING',   'warning');
+  renderGroup(alerts.info,    'INFO',      'info');
+
+  document.getElementById('alerts-content').innerHTML=html;
+}
+
+function renderPlanAlertStrip(){
+  const alerts=buildAlerts();
+  const items=[...alerts.critical,...alerts.warning].slice(0,6);
+  if(!items.length){
+    document.getElementById('plan-alert-strip').innerHTML='';
+    return;
+  }
+  let html=`<div class="alert-strip-hdr"><span style="width:8px;height:8px;background:var(--red);border-radius:50%;display:inline-block"></span>Active Alerts</div><div class="alert-strip">`;
+  items.forEach(a=>{
+    const isCrit=a.sev==='critical';
+    html+=`<div class="alert-strip-row ${isCrit?'':'warn'}">
+      <span class="a-sku">${a.sku}</span>
+      <span class="a-msg">${a.title} &mdash; ${a.detail}</span>
+      <span class="a-act" onclick="document.querySelector('[onclick=\\"showTab(\'alerts\',this)\\"]').click()">View alerts &#8594;</span>
+    </div>`;
+  });
+  if(alerts.critical.length+alerts.warning.length>6){
+    html+=`<div style="padding:4px 10px;font-size:8pt;color:#888">+ ${alerts.critical.length+alerts.warning.length-6} more — see Alerts tab</div>`;
+  }
+  html+='</div>';
+  document.getElementById('plan-alert-strip').innerHTML=html;
+}
+
+function fixStickyOffsets(){
+  // Dynamically set top for sticky plan bar and grid headers
+  const hdr=document.querySelector('.hdr');
+  const tabs=document.querySelector('.tabs');
+  const bar=document.getElementById('sticky-plan-bar');
+  if(!hdr||!tabs||!bar)return;
+  const tabBottom=hdr.offsetHeight+tabs.offsetHeight;
+  bar.style.top=tabBottom+'px';
+  // Grid headers must sit below the sticky bar
+  const gridTop=tabBottom+bar.offsetHeight;
+  document.querySelectorAll('.grid-tbl th').forEach(th=>th.style.top=gridTop+'px');
+  document.querySelectorAll('.dt thead th').forEach(th=>th.style.top=tabBottom+'px');
 }
 
 // ═══ HELPERS ═══════════════════════════════════════════════════════════════
@@ -684,10 +921,12 @@ function renderPlan(){
     const committed=soh.committed_cartons||0;
     const netAvail=grossStock-committed;
     const wkly=(fcast[sku.code]?.weekly_cartons||0);
-    const cover=wkly>0?netAvail/wkly:99;
+    const cover=wkly>0?netAvail/wkly:null;
     if(netAvail<0)totalShort++;
-    else if(cover<6)totalCrit++;else if(cover<12)totalWarn++;else totalOk++;
-    // Order window: project from net available
+    else if(cover!==null&&cover<6)totalCrit++;
+    else if(cover!==null&&cover<12)totalWarn++;
+    else if(cover!==null)totalOk++;
+    // else cover===null (no rate): don't count
     const sku_lead=sku.lead_max_wks||16;
     let proj=Math.max(0,netAvail);
     for(let w=0;w<sku_lead;w++){
@@ -696,8 +935,8 @@ function renderPlan(){
       proj+=getPOArrivals(sku.code,wkIso);
       proj-=demand;
     }
-    const projCover=wkly>0?proj/wkly:99;
-    if(projCover<(sku.safety_wks||SAFETY_DEFAULT))orderNow++;
+    const projCover=wkly>0?proj/wkly:null;
+    if(projCover!==null&&projCover<(sku.safety_wks||SAFETY_DEFAULT))orderNow++;
   });
   document.getElementById('plan-tiles').innerHTML=`
     <div class="tile red"><div class="tile-lbl">Stock Shortfall NOW</div><div class="tile-val">${totalShort}</div><div class="tile-sub">SOH less than open sales orders</div></div>
@@ -741,11 +980,12 @@ function renderPlan(){
     let orderNowFlag=false;
 
     wkCols.forEach((wk,i)=>{
+      const opening=running; // capture opening stock before this week's movement
       const promo=getPromoUplift(sku.code,wk.iso);
       const demand=wklyFcast+promo;
       const arrivals=getPOArrivals(sku.code,wk.iso);
       running=running+arrivals-demand;
-      const cover=wklyFcast>0?running/wklyFcast:99;
+      const cover=wklyFcast>0?running/wklyFcast:null; // null = no rate, not ∞
 
       if(i===0){
         let projected=Math.max(0,running);
@@ -755,11 +995,11 @@ function renderPlan(){
           const fa=getPOArrivals(sku.code,fwk.iso);
           projected=Math.max(0,projected+fa-fd);
         }
-        const projCover=wklyFcast>0?projected/wklyFcast:99;
-        if(projCover<sku_safety){orderNowFlag=true;}
+        const projCover=wklyFcast>0?projected/wklyFcast:null;
+        if(projCover!==null&&projCover<sku_safety){orderNowFlag=true;}
       }
 
-      wkData.push({demand,arrivals,closing:running,cover,hasPromo:promo>0});
+      wkData.push({opening,demand,arrivals,closing:running,cover,hasPromo:promo>0});
     });
 
     // SKU header row
@@ -771,23 +1011,31 @@ function renderPlan(){
       ${fromDefault?'&nbsp;<span style="background:#555;color:#ccc;font-size:7.5pt;padding:1px 6px;border-radius:10px">est. rate</span>':''}
     </td></tr>`;
 
-    // Row 0: SOH position (gross / committed / net)
+    // Row 0: SOH position summary (static — spans all week columns)
     html+=`<tr style="background:#fdf3f3">
       <td></td>
-      <td class="row-lbl" style="color:#C0392B;font-weight:bold">SOH position</td>`;
-    // Only show in first week col, span rest
-    html+=`<td class="num" colspan="${weeks}" style="font-size:8pt;color:#444;text-align:left;padding-left:10px">
-      Gross SOH: <strong>${n(grossStock)}</strong> cartons &nbsp;|&nbsp;
-      Committed (open SOs): <strong style="color:${committed>0?'#C0392B':'#555'}">${n(committed)}</strong> cartons &nbsp;|&nbsp;
-      Net available: <strong style="color:${isShort?'#C0392B':'#27AE60'}">${isShort?'('+n(Math.abs(netAvail))+') SHORTFALL':n(netAvail)}</strong> cartons
-    </td>
-    <td rowspan="5" style="background:#f0f0f0;text-align:center;vertical-align:middle;font-size:8pt">
-      ${isShort?`<span style="color:var(--red);font-weight:bold">&#9888; SHORT<br>${n(Math.abs(netAvail))} ctns<br>unfulfilled</span>`:
-        orderNowFlag?`<span style="color:var(--amber);font-weight:bold">&#9888; PLACE ORDER<br>Lead: ${sku_lead} wks</span>`:
-        '<span style="color:var(--green)">OK</span>'}
-    </td></tr>`;
+      <td class="row-lbl" style="color:#C0392B;font-weight:bold">SOH position</td>
+      <td class="num" colspan="${weeks}" style="font-size:8pt;color:#444;text-align:left;padding-left:10px">
+        Gross SOH: <strong>${n(grossStock)}</strong> ctns &nbsp;|&nbsp;
+        Committed (open SOs): <strong style="color:${committed>0?'#C0392B':'#555'}">${n(committed)}</strong> ctns &nbsp;|&nbsp;
+        Net available: <strong style="color:${isShort?'#C0392B':'#27AE60'}">${isShort?'('+n(Math.abs(netAvail))+') SHORTFALL':n(netAvail)}</strong> ctns
+      </td>
+      <td rowspan="6" style="background:#f0f0f0;text-align:center;vertical-align:middle;font-size:8pt">
+        ${isShort?`<span style="color:var(--red);font-weight:bold">&#9888; SHORT<br>${n(Math.abs(netAvail))} ctns<br>unfulfilled</span>`:
+          orderNowFlag?`<span style="color:var(--amber);font-weight:bold">&#9888; PLACE ORDER<br>Lead: ${sku_lead} wks</span>`:
+          '<span style="color:var(--green)">OK</span>'}
+      </td>
+    </tr>`;
 
-    // Row 1: Forecast demand
+    // Row 1: Opening stock (= net available, then prior week's closing)
+    html+=`<tr><td></td><td class="row-lbl" style="color:#333">Opening stock</td>`;
+    wkData.forEach(w=>{
+      const neg=w.opening<0;
+      html+=`<td class="num" style="${neg?'color:#C0392B;font-weight:bold':''}">${neg?'('+n(Math.abs(w.opening))+')':n(w.opening)}</td>`;
+    });
+    html+='</tr>';
+
+    // Row 2: Forecast demand
     html+=`<tr><td></td><td class="row-lbl" style="color:#555">Forecast demand${fromDefault?' <em style="color:#999;font-size:7pt">(est)</em>':''}</td>`;
     wkData.forEach(w=>{
       const hasPr=w.hasPromo;
@@ -795,33 +1043,41 @@ function renderPlan(){
     });
     html+='</tr>';
 
-    // Row 2: PO arrivals
+    // Row 3: PO arrivals
     html+=`<tr><td></td><td class="row-lbl" style="color:#0E7CCE">PO arrivals</td>`;
     wkData.forEach(w=>{
       html+=`<td class="num" style="color:${w.arrivals>0?'#0E7CCE':'#ccc'};font-weight:${w.arrivals>0?'bold':'normal'}">${w.arrivals>0?n(w.arrivals):'-'}</td>`;
     });
     html+='</tr>';
 
-    // Row 3: Closing stock (can be negative — show in red)
-    html+=`<tr><td></td><td class="row-lbl">Projected stock</td>`;
+    // Row 4: Closing stock (opening + PO - demand; can be negative — show in red brackets)
+    html+=`<tr><td></td><td class="row-lbl" style="font-weight:bold">Closing stock</td>`;
     wkData.forEach(w=>{
       const neg=w.closing<0;
-      html+=`<td class="num" style="${neg?'color:#C0392B;font-weight:bold':''}">${neg?'('+n(Math.abs(w.closing))+')':n(w.closing)}</td>`;
+      html+=`<td class="num" style="${neg?'color:#C0392B;font-weight:bold':'font-weight:bold'}">${neg?'('+n(Math.abs(w.closing))+')':n(w.closing)}</td>`;
     });
     html+='</tr>';
 
-    // Row 4: Weeks cover (colour coded)
-    html+=`<tr><td></td><td class="row-lbl" style="font-weight:bold">Weeks cover</td>`;
+    // Row 5: Weeks cover — only show when forecast rate exists; no rate = "—"
+    html+=`<tr><td></td><td class="row-lbl" style="font-weight:bold;color:#555">Weeks cover</td>`;
     wkData.forEach(w=>{
-      const cls=w.closing<0?'wk-cell cov-zero':getCoverClass(w.cover);
-      const cv=w.closing<0?'SHORT':w.cover>=99?'∞':n(w.cover,1);
-      html+=`<td class="${cls}">${cv}</td>`;
+      if(w.cover===null){
+        html+=`<td class="wk-cell" style="color:#bbb;font-size:7.5pt">no rate</td>`;
+      } else {
+        const cls=w.closing<0?'wk-cell cov-zero':getCoverClass(w.cover);
+        const cv=w.closing<0?'SHORT':n(w.cover,1);
+        html+=`<td class="${cls}">${cv}</td>`;
+      }
     });
     html+='</tr>';
   });
 
   html+='</tbody></table>';
   document.getElementById('plan-grid').innerHTML=html;
+
+  renderPlanAlertStrip();
+  // defer sticky calc until DOM has rendered
+  requestAnimationFrame(fixStickyOffsets);
 }
 
 // ═══ RENDER STOCK ══════════════════════════════════════════════════════════
@@ -1282,6 +1538,7 @@ function showTab(id,btn){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('pane-'+id).classList.add('active');
   btn.classList.add('active');
+  if(id==='plan') requestAnimationFrame(fixStickyOffsets);
 }
 
 function openModal(id){document.getElementById(id).classList.add('open')}
