@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AGD Demand Planner</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#F5F5F5;color:#333;font-size:10pt;min-height:100vh}
+:root{--navy:#1B2A4A;--red:#C0392B;--amber:#E67E22;--green:#27AE60;--blue:#0E7CCE;--white:#FFFFFF;--ltgrey:#F5F5F5;--mdgrey:#CCCCCC;--dktext:#333333}
+.hdr{background:var(--navy);color:var(--white);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid var(--blue);position:sticky;top:0;z-index:200}
+.hdr-left{display:flex;align-items:center;gap:14px}
+.hdr img{height:36px}
+.hdr h1{font-size:17pt;font-weight:bold}
+.hdr .sub{font-size:9pt;color:#8fa8c8;margin-top:2px}
+.hdr-right{font-size:8.5pt;color:#8fa8c8;text-align:right}
+.tabs{background:var(--white);border-bottom:2px solid var(--mdgrey);padding:0 20px;display:flex;position:sticky;top:66px;z-index:100;overflow-x:auto}
+.tab{font-family:Arial,sans-serif;font-size:9.5pt;font-weight:bold;padding:10px 18px;border:none;background:none;color:#666;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.tab:hover{color:var(--navy)}
+.tab.active{color:var(--navy);border-bottom-color:var(--blue)}
+.pane{display:none}.pane.active{display:block}
+.banner{background:#fff8e1;border-left:4px solid var(--amber);padding:8px 20px;font-size:8.5pt;color:#7c5000}
+.banner.info{background:#e8f4fd;border-color:var(--blue);color:#1B2A4A}
+.banner.ok{background:#eafaf1;border-color:var(--green);color:#1a5e38}
+.banner.err{background:#fdecea;border-color:var(--red);color:#7b1a14}
+.filter-bar{background:var(--white);border-bottom:1px solid var(--mdgrey);padding:8px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.filter-bar label{font-size:9pt;color:#666}
+select,input[type=text],input[type=date],input[type=number]{font-family:Arial,sans-serif;font-size:9pt;padding:5px 8px;border:1px solid var(--mdgrey);border-radius:4px;background:var(--white);color:var(--dktext)}
+.btn{font-family:Arial,sans-serif;font-size:9pt;font-weight:bold;padding:6px 14px;border:none;border-radius:4px;cursor:pointer;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-blue{background:var(--blue);color:var(--white)}
+.btn-green{background:var(--green);color:var(--white)}
+.btn-red{background:var(--red);color:var(--white)}
+.btn-amber{background:var(--amber);color:var(--white)}
+.btn-grey{background:#e0e0e0;color:var(--dktext)}
+.tiles{display:flex;gap:12px;padding:14px 20px;flex-wrap:wrap}
+.tile{flex:1;min-width:140px;background:var(--white);border-radius:6px;padding:12px 14px;border-top:4px solid var(--navy);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.tile.red{border-top-color:var(--red)}.tile.amber{border-top-color:var(--amber)}.tile.green{border-top-color:var(--green)}.tile.blue{border-top-color:var(--blue)}
+.tile-lbl{font-size:7.5pt;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+.tile-val{font-size:16pt;font-weight:bold;color:var(--dktext);line-height:1.1}
+.tile-sub{font-size:8pt;color:#999;margin-top:3px}
+.sec-hdr{padding:10px 20px 4px;font-size:13pt;font-weight:bold;color:var(--navy);border-bottom:2px solid var(--blue);margin-top:4px}
+/* Grid table */
+.grid-wrap{padding:0 20px 28px;overflow-x:auto}
+.grid-tbl{border-collapse:collapse;font-size:8.5pt;min-width:1200px;width:100%}
+.grid-tbl th{background:var(--navy);color:var(--white);padding:5px 8px;white-space:nowrap;font-size:8pt;position:sticky;top:108px;z-index:50}
+.grid-tbl th.wk-hdr{background:#2c3e66;text-align:center;min-width:68px}
+.grid-tbl th.wk-hdr.alert-col{background:#7b1a14}
+.grid-tbl .sku-lbl{background:#2c3e66;color:var(--white);font-weight:bold;padding:5px 8px;border-top:2px solid var(--blue)}
+.grid-tbl td{padding:4px 7px;border-bottom:1px solid #e8e8e8;white-space:nowrap}
+.grid-tbl .row-lbl{font-size:8pt;color:#555;width:110px}
+.grid-tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.wk-cell{text-align:center;font-weight:bold}
+.wk-cell.cov-ok{background:#eafaf1;color:#1a5e38}
+.wk-cell.cov-warn{background:#fff3cd;color:#7c5000}
+.wk-cell.cov-crit{background:#fdecea;color:#7b1a14}
+.wk-cell.cov-zero{background:#c0392b;color:#fff}
+.wk-cell.reorder{background:#fff3cd;border:2px solid var(--amber)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:7.5pt;font-weight:bold;text-transform:uppercase}
+.badge-ok{background:#eafaf1;color:var(--green)}.badge-warn{background:#fff3cd;color:var(--amber)}.badge-crit{background:#fdecea;color:var(--red)}
+/* Data tables */
+.dt-wrap{padding:16px 20px}
+.dt{width:100%;border-collapse:collapse;font-size:9pt}
+.dt thead th{background:var(--navy);color:var(--white);padding:7px 10px;text-align:left;font-size:8.5pt;font-weight:bold;position:sticky;top:108px;z-index:10}
+.dt thead th.num{text-align:right}
+.dt tbody td{padding:6px 10px;border-bottom:1px solid var(--ltgrey)}
+.dt tbody tr:hover{background:#f0f6ff}
+.dt .num{text-align:right;font-variant-numeric:tabular-nums}
+.dt tfoot td{background:#f0f0f0;font-weight:bold;padding:6px 10px;border-top:2px solid var(--mdgrey)}
+/* Form / modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--white);border-radius:8px;padding:24px;width:520px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.25)}
+.modal h2{font-size:13pt;font-weight:bold;color:var(--navy);margin-bottom:16px;border-bottom:2px solid var(--blue);padding-bottom:8px}
+.form-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.form-row label{display:block;font-size:8.5pt;color:#555;margin-bottom:3px}
+.form-row .f{flex:1;min-width:150px}
+.form-row select,.form-row input{width:100%}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--mdgrey);padding-top:12px}
+/* State legend */
+.state-toggle{display:flex;gap:6px;align-items:center}
+.state-btn{font-size:8.5pt;padding:4px 12px;border-radius:12px;border:2px solid var(--mdgrey);background:var(--white);cursor:pointer;font-family:Arial,sans-serif;font-weight:bold}
+.state-btn.active{border-color:var(--navy);background:var(--navy);color:var(--white)}
+/* Promo */
+.promo-week{background:#fff3cd;border-left:3px solid var(--amber)}
+/* Spinner */
+.spin{display:inline-block;width:16px;height:16px;border:2px solid var(--mdgrey);border-top-color:var(--blue);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.loading{text-align:center;padding:40px;color:#888;font-size:11pt}
+/* Forecast builder */
+.fcast-table{border-collapse:collapse;font-size:8.5pt;width:100%}
+.fcast-table th{background:var(--navy);color:#fff;padding:5px 8px;font-size:8pt}
+.fcast-table td{padding:5px 8px;border-bottom:1px solid #e8e8e8}
+.fcast-table .retailer-hdr{background:#2c3e66;color:#fff;font-weight:bold}
+.fcast-table input[type=number]{width:80px;text-align:right}
+/* SKU cards (promo grid) */
+.wk-grid{overflow-x:auto}
+.promo-grid{border-collapse:collapse;font-size:8pt;min-width:900px}
+.promo-grid th{background:var(--navy);color:#fff;padding:4px 6px;font-size:7.5pt;white-space:nowrap;text-align:center}
+.promo-grid td{padding:3px 5px;border:1px solid #e0e0e0;text-align:center;white-space:nowrap}
+.promo-cell{background:#fff3cd;cursor:pointer;font-weight:bold;color:var(--amber)}
+.promo-cell:hover{background:#ffe082}
+/* Retailer colour bands */
+.ret-coles{border-left:3px solid #CC0000}.ret-ww{border-left:3px solid #007D32}.ret-other{border-left:3px solid #888}
+footer{text-align:center;font-size:8pt;color:#999;padding:16px;border-top:1px solid var(--mdgrey);background:var(--white);margin-top:24px}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-left">
+    <img id="agd-logo" src="" alt="AGD">
+    <div>
+      <div class="h1">AGD Demand Planner</div>
+      <div class="sub">Oatly &amp; Perfect Ted — 26-week forward planning</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div id="last-refresh">Loading…</div>
+    <div id="state-mode-lbl" style="margin-top:3px;font-size:8pt;color:#afc9e8">National view</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('plan',this)">Planning Grid</button>
+  <button class="tab" onclick="showTab('stock',this)">Stock on Hand</button>
+  <button class="tab" onclick="showTab('po',this)">Inbound Containers</button>
+  <button class="tab" onclick="showTab('forecast',this)">Retailer Forecast</button>
+  <button class="tab" onclick="showTab('promo',this)">Promo Calendar</button>
+  <button class="tab" onclick="showTab('master',this)">SKU Master</button>
+</div>
+
+<div id="setup-banner" class="banner err" style="display:none">
+  <strong>Database not set up.</strong> Run <code>setup.sql</code> in the Supabase SQL editor, then refresh.
+</div>
+<div id="status-banner" class="banner info" style="display:none"></div>
+
+<!-- ═══ TAB 1: PLANNING GRID ═══════════════════════════════════════════════ -->
+<div id="pane-plan" class="pane active">
+  <div class="filter-bar">
+    <label>Brand: <select id="plan-brand" onchange="renderPlan()">
+      <option value="all">All</option>
+      <option value="Oatly">Oatly</option>
+      <option value="PerfectTed">Perfect Ted</option>
+    </select></label>
+    <label>Weeks: <select id="plan-weeks" onchange="renderPlan()">
+      <option value="13">13 weeks</option>
+      <option value="26" selected>26 weeks</option>
+    </select></label>
+    <div class="state-toggle">
+      <span style="font-size:9pt;color:#666">View:</span>
+      <button class="state-btn active" onclick="setStateView('national',this)" id="sv-nat">National</button>
+      <button class="state-btn" onclick="setStateView('nsw',this)" id="sv-nsw">NSW</button>
+      <button class="state-btn" onclick="setStateView('qld',this)" id="sv-qld">QLD</button>
+    </div>
+    <button class="btn btn-blue" onclick="loadAll()"><span class="spin" id="plan-spin" style="display:none"></span>Refresh</button>
+    <span style="font-size:8pt;color:#999;margin-left:4px">Green ≥12 wks | Amber 6-11 wks | Red &lt;6 wks | <span style="background:#fff3cd;padding:1px 5px;border-radius:3px">⚠ Order window open</span></span>
+  </div>
+
+  <div class="tiles" id="plan-tiles"><div class="loading"><span class="spin"></span>Loading…</div></div>
+
+  <div class="sec-hdr">26-Week Rolling Stock Projection</div>
+  <div class="grid-wrap">
+    <div id="plan-grid"><div class="loading"><span class="spin"></span>Building plan…</div></div>
+  </div>
+</div>
+
+<!-- ═══ TAB 2: STOCK ON HAND ════════════════════════════════════════════════ -->
+<div id="pane-stock" class="pane">
+  <div class="filter-bar">
+    <button class="btn btn-green" onclick="openModal('modal-soh')">+ Update Stock</button>
+    <span style="font-size:8.5pt;color:#888;margin-left:8px">Stock is entered in cartons. QLD + NSW = National total.</span>
+  </div>
+  <div class="dt-wrap">
+    <table class="dt">
+      <thead><tr>
+        <th>SKU Code</th><th>Description</th><th>Brand</th>
+        <th class="num">QLD Cartons</th><th class="num">NSW Cartons</th>
+        <th class="num">Total Cartons</th><th class="num">Total Units</th>
+        <th>As At</th><th>Notes</th><th>Action</th>
+      </tr></thead>
+      <tbody id="stock-tbody"><tr><td colspan="10" class="loading"><span class="spin"></span>Loading…</td></tr></tbody>
+      <tfoot><tr>
+        <td colspan="3"><strong>TOTAL</strong></td>
+        <td class="num" id="soh-tot-qld">—</td>
+        <td class="num" id="soh-tot-nsw">—</td>
+        <td class="num" id="soh-tot-nat">—</td>
+        <td class="num" id="soh-tot-units">—</td>
+        <td colspan="3"></td>
+      </tr></tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ TAB 3: INBOUND CONTAINERS ══════════════════════════════════════════ -->
+<div id="pane-po" class="pane">
+  <div class="filter-bar">
+    <button class="btn btn-green" onclick="openModal('modal-po')">+ Add Container / PO</button>
+    <label>Status: <select id="po-status-filter" onchange="renderPO()">
+      <option value="all">All</option>
+      <option value="Placed">Placed</option>
+      <option value="On Water">On Water</option>
+      <option value="Arrived">Arrived</option>
+      <option value="Cancelled">Cancelled</option>
+    </select></label>
+    <label>SKU: <select id="po-sku-filter" onchange="renderPO()"><option value="all">All SKUs</option></select></label>
+  </div>
+  <div class="tiles" id="po-tiles"></div>
+  <div class="dt-wrap">
+    <table class="dt">
+      <thead><tr>
+        <th>PO Number</th><th>SKU</th><th>Supplier</th>
+        <th class="num">QLD Cartons</th><th class="num">NSW Cartons</th><th class="num">Total Cartons</th>
+        <th>Order Date</th><th>ETA</th><th>Weeks Out</th><th>Status</th><th>Notes</th><th>Action</th>
+      </tr></thead>
+      <tbody id="po-tbody"><tr><td colspan="12" class="loading"><span class="spin"></span>Loading…</td></tr></tbody>
+      <tfoot><tr>
+        <td colspan="3"><strong>ACTIVE TOTAL</strong></td>
+        <td class="num" id="po-tot-qld">—</td>
+        <td class="num" id="po-tot-nsw">—</td>
+        <td class="num" id="po-tot-nat">—</td>
+        <td colspan="6"></td>
+      </tr></tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ TAB 4: RETAILER FORECAST ═══════════════════════════════════════════ -->
+<div id="pane-forecast" class="pane">
+  <div class="filter-bar">
+    <label>SKU: <select id="fcast-sku" onchange="renderForecast()"><option value="all">All SKUs</option></select></label>
+    <label>Retailer: <select id="fcast-retailer" onchange="renderForecast()"><option value="all">All Retailers</option></select></label>
+    <button class="btn btn-blue" onclick="openModal('modal-sales')">+ Enter Sales History</button>
+    <span style="font-size:8pt;color:#888">Forecast = last 52 weeks actual sales × 1.10 growth factor. Edit weekly history to recalculate.</span>
+  </div>
+  <div class="tiles" id="fcast-tiles"></div>
+  <div class="sec-hdr">26-Week Forecast by Retailer</div>
+  <div class="dt-wrap" id="fcast-grid-wrap">
+    <div class="loading"><span class="spin"></span>Loading…</div>
+  </div>
+</div>
+
+<!-- ═══ TAB 5: PROMO CALENDAR ══════════════════════════════════════════════ -->
+<div id="pane-promo" class="pane">
+  <div class="filter-bar">
+    <button class="btn btn-amber" onclick="openModal('modal-promo')">+ Add Promo</button>
+    <label>Brand: <select id="promo-brand-filter" onchange="renderPromo()">
+      <option value="all">All</option>
+      <option value="Oatly">Oatly</option>
+      <option value="PerfectTed">Perfect Ted</option>
+    </select></label>
+    <span style="font-size:8pt;color:#888">Click a promo cell to edit. Uplifts feed automatically into the Planning Grid.</span>
+  </div>
+  <div class="tiles" id="promo-tiles"></div>
+  <div class="sec-hdr">Promo Calendar — Next 26 Weeks</div>
+  <div class="wk-grid" style="padding:12px 20px">
+    <div id="promo-grid-wrap"><div class="loading"><span class="spin"></span>Loading…</div></div>
+  </div>
+  <div class="sec-hdr" style="margin-top:16px">Active Promos</div>
+  <div class="dt-wrap">
+    <table class="dt">
+      <thead><tr>
+        <th>SKU</th><th>Retailer</th><th>Promo Week</th>
+        <th>Uplift Type</th><th class="num">Uplift Value</th><th>Notes</th><th>Action</th>
+      </tr></thead>
+      <tbody id="promo-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ TAB 6: SKU MASTER ═══════════════════════════════════════════════════ -->
+<div id="pane-master" class="pane">
+  <div class="filter-bar">
+    <button class="btn btn-green" onclick="openModal('modal-sku')">+ Add SKU</button>
+  </div>
+  <div class="dt-wrap">
+    <table class="dt">
+      <thead><tr>
+        <th>Code</th><th>Description</th><th>Brand</th><th>Supplier</th>
+        <th class="num">Units/Carton</th><th class="num">Lead Min (wks)</th>
+        <th class="num">Lead Max (wks)</th><th class="num">Safety Stock (wks)</th>
+        <th>Active</th><th>Action</th>
+      </tr></thead>
+      <tbody id="sku-tbody"><tr><td colspan="10" class="loading"><span class="spin"></span>Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ MODALS ════════════════════════════════════════════════════════════ -->
+
+<!-- SOH Modal -->
+<div id="modal-soh" class="modal-bg" onclick="if(event.target===this)closeModal('modal-soh')">
+  <div class="modal">
+    <h2>Update Stock on Hand</h2>
+    <input type="hidden" id="soh-edit-id">
+    <div class="form-row">
+      <div class="f"><label>SKU</label>
+        <select id="soh-sku" style="width:100%"><option value="">Select SKU…</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="f"><label>QLD Cartons</label><input type="number" id="soh-qld" min="0" value="0"></div>
+      <div class="f"><label>NSW Cartons</label><input type="number" id="soh-nsw" min="0" value="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="f"><label>As at Date</label><input type="date" id="soh-date"></div>
+      <div class="f"><label>Notes</label><input type="text" id="soh-notes" placeholder="e.g. NS extract 07/08/2026"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-grey" onclick="closeModal('modal-soh')">Cancel</button>
+      <button class="btn btn-green" onclick="saveSoh()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- PO Modal -->
+<div id="modal-po" class="modal-bg" onclick="if(event.target===this)closeModal('modal-po')">
+  <div class="modal">
+    <h2>Add / Edit Container PO</h2>
+    <input type="hidden" id="po-edit-id">
+    <div class="form-row">
+      <div class="f"><label>PO Number</label><input type="text" id="po-num" placeholder="e.g. POAGD350"></div>
+      <div class="f"><label>SKU</label><select id="po-sku" style="width:100%"><option value="">Select…</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="f"><label>Supplier</label><input type="text" id="po-supplier" placeholder="e.g. Oatly EMEA AB"></div>
+      <div class="f"><label>Status</label>
+        <select id="po-status" style="width:100%">
+          <option>Placed</option><option>On Water</option><option>Arrived</option><option>Cancelled</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="f"><label>QLD Cartons</label><input type="number" id="po-qld" min="0" value="0"></div>
+      <div class="f"><label>NSW Cartons</label><input type="number" id="po-nsw" min="0" value="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="f"><label>Order Date</label><input type="date" id="po-order-date"></div>
+      <div class="f"><label>ETA (arrival date)</label><input type="date" id="po-eta"></div>
+    </div>
+    <div class="form-row">
+      <div class="f" style="flex:2"><label>Notes</label><input type="text" id="po-notes" placeholder="e.g. Container ABCD-12345, Port: Yantian"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-grey" onclick="closeModal('modal-po')">Cancel</button>
+      <button class="btn btn-red" id="po-del-btn" onclick="deletePO()" style="display:none">Delete</button>
+      <button class="btn btn-green" onclick="savePO()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sales History Modal -->
+<div id="modal-sales" class="modal-bg" onclick="if(event.target===this)closeModal('modal-sales')">
+  <div class="modal" style="width:600px">
+    <h2>Enter Sales History</h2>
+    <div class="form-row">
+      <div class="f"><label>SKU</label><select id="sales-sku" style="width:100%" onchange="loadSalesForm()"><option value="">Select SKU…</option></select></div>
+      <div class="f"><label>Retailer</label>
+        <select id="sales-retailer" style="width:100%">
+          <option>Woolworths</option><option>Coles</option><option>Amazon</option>
+          <option>Bidfood</option><option>Harris Farm</option><option>SPAR</option>
+          <option>Drakes</option><option>Statewide IGA</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+    <p style="font-size:8.5pt;color:#666;margin-bottom:8px">Enter actual weekly carton sales for the last 52 weeks. Leave 0 if no sales that week.</p>
+    <div id="sales-form-rows" style="max-height:320px;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button class="btn btn-grey" onclick="closeModal('modal-sales')">Cancel</button>
+      <button class="btn btn-green" onclick="saveSalesHistory()">Save All Weeks</button>
+    </div>
+  </div>
+</div>
+
+<!-- Promo Modal -->
+<div id="modal-promo" class="modal-bg" onclick="if(event.target===this)closeModal('modal-promo')">
+  <div class="modal">
+    <h2>Add / Edit Promo</h2>
+    <input type="hidden" id="promo-edit-id">
+    <div class="form-row">
+      <div class="f"><label>SKU</label><select id="promo-sku" style="width:100%"><option value="">Select…</option></select></div>
+      <div class="f"><label>Retailer</label>
+        <select id="promo-retailer" style="width:100%">
+          <option>Woolworths</option><option>Coles</option><option>Amazon</option>
+          <option>Bidfood</option><option>All</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="f"><label>Promo Week (Monday)</label><input type="date" id="promo-week"></div>
+      <div class="f"><label>Uplift Type</label>
+        <select id="promo-uplift-type" style="width:100%">
+          <option value="pct">% above forecast</option>
+          <option value="cartons">Extra cartons (absolute)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="f"><label>Uplift Value (% or cartons)</label><input type="number" id="promo-uplift-val" min="0" value="20" step="1"></div>
+      <div class="f"><label>Notes</label><input type="text" id="promo-notes" placeholder="e.g. Coles TPR Week 8"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-grey" onclick="closeModal('modal-promo')">Cancel</button>
+      <button class="btn btn-red" id="promo-del-btn" onclick="deletePromo()" style="display:none">Delete</button>
+      <button class="btn btn-amber" onclick="savePromo()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- SKU Modal -->
+<div id="modal-sku" class="modal-bg" onclick="if(event.target===this)closeModal('modal-sku')">
+  <div class="modal">
+    <h2>Add / Edit SKU</h2>
+    <input type="hidden" id="sku-edit-id">
+    <div class="form-row">
+      <div class="f"><label>Code</label><input type="text" id="sku-code" placeholder="e.g. FG 61737"></div>
+      <div class="f"><label>Brand</label>
+        <select id="sku-brand" style="width:100%"><option>Oatly</option><option>PerfectTed</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="f" style="flex:2"><label>Description</label><input type="text" id="sku-desc" placeholder="e.g. Oatly Oat Milk Barista Edition 1L"></div>
+    </div>
+    <div class="form-row">
+      <div class="f"><label>Supplier</label><input type="text" id="sku-supplier" placeholder="e.g. Oatly EMEA AB"></div>
+      <div class="f"><label>Units per Carton</label><input type="number" id="sku-carton-units" min="1" value="6"></div>
+    </div>
+    <div class="form-row">
+      <div class="f"><label>Lead Time Min (weeks)</label><input type="number" id="sku-lead-min" min="1" value="12"></div>
+      <div class="f"><label>Lead Time Max (weeks)</label><input type="number" id="sku-lead-max" min="1" value="16"></div>
+      <div class="f"><label>Safety Stock (weeks)</label><input type="number" id="sku-safety" min="1" value="6"></div>
+    </div>
+    <div class="form-row">
+      <div class="f"><label>Active</label>
+        <select id="sku-active" style="width:100%"><option value="true">Active</option><option value="false">Inactive</option></select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-grey" onclick="closeModal('modal-sku')">Cancel</button>
+      <button class="btn btn-green" onclick="saveSku()">Save</button>
+    </div>
+  </div>
+</div>
+
+<footer id="footer">
+  AGD Demand Planner | Aus Groc Dist — Part of the Mann &amp; Noble Group | <span id="footer-gen"></span> | INTERNAL — NOT FOR DISTRIBUTION
+</footer>
+
+<script>
+// ═══ CONFIG ════════════════════════════════════════════════════════════════
+const SB_URL = 'https://yxaebxkkclbjezffmerw.supabase.co';
+const SB_KEY = 'sb_publishable_yLmaFw0myJv-rHuCC2LsHw_WW7d8lJn';
+const LOGO   = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAkACQAAD/4QKyRXhpZgAATU0AKgAAAAgAAodpAAQAAAABAAABMuocAAcAAAEMAAAAJgAAAAAc6gAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWQAwACAAAAFAAAAoCQBAACAAAAFAAAApSSkQACAAAAAzAxAACSkgACAAAAAzAxAADqHAAHAAABDAAAAXQAAAAAHOoAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADIwMjQ6MTA6MDEgMTk6NDk6NTUAMjAyNDoxMDowMSAxOTo0OTo1NQAAAP/hAqBodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvADw/eHBhY2tldCBiZWdpbj0n77u/JyBpZD0nVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkJz8+DQo8eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIj48cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPjxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSJ1dWlkOmZhZjViZGQ1LWJhM2QtMTFkYS1hZDMxLWQzM2Q3NTE4MmYxYiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIj48eG1wOkNyZWF0ZURhdGU+MjAyNC0xMC0wMVQxOTo0OTo1NS4wMTA8L3htcDpDcmVhdGVEYXRlPjwvcmRmOkRlc2NyaXB0aW9uPjwvcmRmOlJERj48L3g6eG1wbWV0YT4NCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8P3hwYWNrZXQgZW5kPSd3Jz8+/9sAQwADAgIDAgIDAwMDBAMDBAUIBQUEBAUKBwcGCAwKDAwLCgsLDQ4SEA0OEQ4LCxAWEBETFBUVFQwPFxgWFBgSFBUU/9sAQwEDBAQFBAUJBQUJFA0LDRQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU/8AAEQgAcwCaAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/aAAwDAQACEQMRAD8A+F6KKK9UgKKKKACiiigAooooAKKKKOoHZfBvwro3jj4peF9B8Rap/Y2h6jfpb3d9uCmKMtjOTwCfU8DvX6jzf8EzvgVa2guZBrS2wUMZn1YBcHAHO0DnI56V+bf7Lvwkl+N/xy8MeF/I8+xmuFuNQOMiO0jO+Un6gBfdnFfdn/BU74uQeFvh7oHw10yYRXOryC7u4YjtEVpDgRqQOgaQDj0jNc07uVkxnZWX/BN34A6lMYrOfVLuRRuKW+sBzjjkgKSByOfevlH9vb9l34cfs82fhqXwdqd2mqX0kkdzpF5dLO/lBcidcAMvPHPB4x0NeS/se/GJfgr8ffDeu3lw0Wj3EhsNTYtwIJcKSR3CNsP/AAH619g/8FXPg/8A2jofhv4l6fbiU2ZGl6lNEuSYWJaBiR1AYyLn1kUdKXvRkk2B+adFFFdQgooooAKKKKACiiigAooooAKKK9X/AGW/g5Z/Hr42aD4Mv76bT7G886Sea3A8zbHE0hRcggMcAZPFDfKrgeUUbgMZxycDJAHtznnPsK/Wa4/4JS/CF42SHWvFkcpXhjfW7bSehx9nGenrW34R/wCCb3ww0P4Y614au7Ya3rV+0pj8RXKFbi2bpFsAIA2dePvHOcjisfbLcZ+P1Ffq7o//AASh+Flvp8Kan4h8UX15j55re5t4UJ/2VMLHH4mvj79ub9l3QP2Z/Fnhy38N39/eaXrFpJNt1F0eSJ43AYblUDaQR2pxqpgfT/8AwSr+FKeHfAPiX4lamiwtqcjWVpM+ABbQndK+fQvwf+uRr4b/AGpfjB/wvD45+KPFCOTpks/2fT1YHP2WMbY8jsSBux6ua/S74HWNzH/wTnt4NJgklvZfC+oNDFbKS0kj+cflA5yWb9a/Lb/hQvxM5/4t74q5yT/xJrnv/wAArOElzNsDg+vXngD8q/YH9mfxTY/tbfsZ3HhXU5RJqUNg+gah5h3MkqIPIm+pHltn1Vq/Lr/hQnxM/wCie+Kf/BNc/wDxFfff/BK3wb4q8Dn4h2/iLQdV0GGf7G8K6lZyW4lYedkrvAzjcKdVpxumB+bPiLQbzwt4g1TRdRiaDUNOuZrS4iJ+5JE7K4/BgBWdXsf7ZFrHa/tSfEtI0VU/tmaTAH8TYYn8SxP4145XQtkIKKKKACiiigAooooAKKKKACvpf/gnRdx2/wC1v4RVwQJ4r2LgdW+zycH2+X9a+aK+nP8Agm+ob9rTwtwrbbe9xu9fs8nP6VFT4WM+lv8AgoV8C/it45+LnhrxZ8PNE1TUIdN0lY/telXCxzW8wmdgFw4cHDD7gNfTPwG+IHirUf2YNO8U+K9Nuk8WWem3RurS6iMU0stuZEG5ezN5eeP71eY/taftwap+zH8UtD8Pr4Ytde0i8sFvp3a4eG4GZJFwjYK8bB1Hevor4d/EzQ/iR8N9K8a6VdbdD1CzF6sk3ytGoGXV/RlIYN9K4W3yrQZ+cn7O/wAJfjz8Qv2oPCPxM8ceH9aTTl1B7qe+1bEKQx7WYKkLEMo+6FCqAe9aX/BXK6ibx34AtQSZo9OuJWJHRWkHf/gB49q9Z8Ff8FHE+Jv7RmheAvDHhiH/AIRu/v8A7F/al5KVndQDmRYwcKMj5QcmvLP+CuuD4v8Ah5wATYXOW748xOK2j/EV0M+ov2XfFsPgP9h/wx4kuLeS6i0nQp72SCIgO6xNIxCn3Arxv/h7j4M/6EPXP+/8P+Nd58K/+Uap/wCxRvv/AEGWvyA2j0ohBTbuJn6h/wDD3HwZ/wBCHrn/AH/h/wAa93/Ze/a80b9qKXxBFpOg6hoh0dYmkN7Irb/M3427fTYfzr8Rdo9K/RP/AIJBqP7Q+JAAA/dWXQe8tVUpqMRHyv8Atn/8nUfEv/sLSf8AoK14rXtX7Z//ACdR8S/+wtJ/6CteK1vD4EIKKKKoAooooAKKKKACiiigAr1D9mf4rp8Efjh4T8XTx+dY2dyyXa/xfZ5FKSMv+0FZmx/s15fRUyV1YD9ff2u/2TbT9r3Q9A8W+D9esYdagtdtpczMWtL21Zi4BdAxBBOQQDwcEV3XwN+CPiP4cfsk/wDCt9WkspPEQ07UrXzLaZnh3zyTNH8+0HpIuTt7V+UPwj/ao+J/wPtPsPhPxPcWmmbt5066iWa2DdyquGCk9eMZPNfqt8BPjR4m+In7Ho+IeszW8viT+zdSufOigCx74JJwh2gY6IvbtXJUjKKsUjxT9j3/AIJ56z8GviFa+OPHOqaZc3umB207T9MdpYkkZChlkZlUAqrHAGfXOa+bP+CkHxq0r4tfGy3sNCukvtM8O2n2BruMgxyXBctKVI6qPkXP+y1cV8Rv25/jN8TNJm0rU/Fr2OnzKUlg0q3SzLqeql1UMR7ZxXgfr79ff/OT+db04S57yBn6/fC3/lGqf+xRvv8A0GWvyBr9gfhHE13/AME21jhVpZG8JXwCIu5idsvy4HU544r8f9pLEAHjrkEfzFTTa1EJXu37Kv7WGrfss6prdzYaNa63a6vFHHNBcTGJlZCSpVxx/Ee3evCf8/54r6E/ZG/ZFvP2pNR8QbNfXw3p+jpHvuhbGd3lk3bFADKMfLzz3rWTjbUR5F8TPiBf/FL4ga/4u1RIYr/WLt7uZIBiKPcwARe5woFcxXVfFTwBdfCv4j+IfCN7cR3l1o17Lavcxfck28K47jI5wea5WrSSSsAUUUUAFFFFABRRThG7R71QlM4Z1XKj5QcdeDjnkd+lADaKKKACij8MHBYg54A6ngHiigBAoGABxX358Av20Ph/4B/Y31LwBrLXkXii2stRsre2S3LC6NwZXQq3QbRKA2fSvgStiy8I6zfeHNQ1+2025l0XT5EhurxU/dwvIQFDc9wD9aUkpbjMcAL0GKK09e8M6v4Vu47bWdLvNLuJYUuI4b2BoWeFxlJFDc4IrMp38wPt39iH9uvTfgv4Xk8CePIrmbwzHK0lhf2kIl+y+YxZopF4JQknntmvpxv2wP2UpGJaLR2J67vDRP8A7Sr8hj83Xk+/NKimRwqqWYkbUXknP0Bxj0wTWMqSeuwH67f8Ne/so/8APHRf/CZP/wAarG8df8FFvg38O/B94nw6sv7U1aZG+y2lnpptLXzP4XlZlUFR/shjX5Waho1/pEix39jcWMjBSq3ETIzg91DKOOh6etVMDrjnOSe5NJUY9wNLxP4k1Dxf4k1XXdVuDdanqd3JeXcxxl5HbczHHHX8ugwKzaTaPSlrfbQQUUUUAFFFFACgdDgjvz2HbPuelfpx4V+EE2n/AAh0v9n2XwfeSJ4j8Lza7d+IWtH8m31xyJYY2l+6Coj2khsfd9Tn84fBevQeEvF2j61c6bFrEWn3cd01jcEiObY24o+OxNepar+2B8S9S+LD+OV8S6rbK2orfJosepTfYgFYMIfK3Y8vaAOnPfNRKMnsAT/BTS9P/ZdufHl4t9B4qt/Fz6BJbSPtiWJYA7ZQpuDq+5Sc9ule2f8ADIPw9s/2gNX8Im51S/gsvC9rrOn6AdQgt7vVrqQfNCkzgIuP7vX3rzkfthWmtXXjSw8S/DrS/EHhTxNq48QvoK30tubXUCgDTRzIC2JCBkEVn+MP2otC+JXxS1HxZ4y+GVjrVvJp9tYWmnrqtxbmyWLgMsikMWb0Kms3zgew/Avwn4S8K6n+0Pa6r4L1/QNA07worzaPq0sZ1O3XBEpjlaMBckHawU15t8N/Afwc1jwb8TviLqGheJr7wx4eudPtdO0f+1Ikmfz96u8kqxjOGTPGOtRN+29qt38SdY17UPCum3/h3U/D8fhm58O/apATp6ElV8/PmNINx/eH1rhtU+PFoPBfj7wn4c8H2vh7QvFtxYz+Ql5NcPa/Zc4Cu2TJv3Hqe9CUuoHrX7OfwB8FfGIzTXXw88aNoeqa3LZ2GvW+rW8UFlbkhUUh0Bnlj53bQcnotMuvBa/Dv9mf9ofwulx9rj0nxhptkJ2Xb5ojldRkdM8VyHwv/aus/BvhHwVoXiHwDa+LX8E6hNfaFfDUZrR7ZpJRMyOiKwkHmAbcj7vHTisyT9qCfUNJ+LOlav4Ws9QsfiBdLqTRvcyRPYXKu7xyxnHzqrMDg9cc5ptMD1Dx98Kf+Ek/aA8K6Vqmm+MfihBJ4OsL6S3t7+NbmNngU4MzoFjgUk8H5v8AarS1P9j3wc3x0+EGjpb63o3h3xtDdPd6Rc30E15ZSQbw6rNGGRlyF55615vpv7ZV9a+NrrWb3wnY3+lX/hWHwfqWktcSKLi1SMKWEoAMbHHXpT/+Gwl0nxl8MtU8N+BrXRdL8BR3S2OlSajNdCT7QSX8yQrn7zEjGcd+gosxl/4o/CP4Z+IPhB4x8ZfDzT9a8P3ngzWYdK1Gy1O9S7juo5ZGRZkYAFWDDGOlSfsnzQfD74Q/GP4q2Vjb6h4s8M21haaO11CJVs2uZGRrnYQQWXGVPT5WzmvLLf48X0Pw1+InhD+zbZ7bxlqdvqU9yZGL27RStIqgdxuIUn2zTfgf8dtX+Bmqaq1np9jrei61amy1XQ9UiZre9gP8JAPD8nB6DJ9TTsxHf634k+Mnx++FFnrHjDxHNrXgOPxLBp8jTtEJUuZFIGz5c7QkhO37vI44Fdv4u/Z5+GOv/tHaT8EfB+m69o2rW+qGDUfEGpagk6TW0cDTSlI9igPtUnpjiuB8WftUaPefDmPwT4N+G9j4M0VdZh1ydItSmu5HuI8bRmTGwMFHr0rk9W/aO8QXX7Q0vxg0u2ttK19r8XiwREyQ8II3QnqUZQRz6mhxYHomvfCn4UfE74Z+Otb+Ftp4i0nVPBLQPPFrFyk6apayStGZV2r+7kBAJHQjgDNV/jj8LPhX8AdNPgvUrbxJr/xHfTILuTVLe7jgsbeeVd4jERQsUVcEknJ3cVh+P/2oLPXvBGv+GvCHw80nwBD4muEuteurK4lne8KOZEVRIB5UYclgqZ5pfHn7TWk/FTwsi+Mvhxpmr+NI9NGl23imLUJrdgqf6t3hXEcjr2OcUveA9+f9g7wlp8aeDr6x8Rx+Jn0r7VJ4wa/tl0yK+8rzBbCAgSFOi7jyScjivJLf4afCrwB+zb4Q8beLNE8QeINe8Uz39rD9h1FbeK1eFyqNtKZOcr1JrF8VftTaP8RfD8b+M/hlpeueMY9OXTV8Tx6ncWrSBU2RSSwrhZZFPfOMcHjiuD8U/Ga88XfB/wAFfDubToLez8N3F1PDeK5JmM8gLKy5wNpAp+8M94sf2TfA+sfFHwHNa6hrCfC7WvCUnifUNRaaMzWywI32hS/l7V2uYlwQcFsHmvkTUJ7T7dc/ZoLxLfzG8tWKEhcnAJx1xX134i+KGn/BX9ke7+GUHjHQfGHiTWrqRbabQJDOulabKY5Z42m2jDSSRjMQ7tknPNfH+0f3R+VVG/UQvXr65o/iz39aKK0uAH5lIPKk5IPQn1PrR0xj3/Wiil1A9z/Y1+Hvhv4nfGdNI8X6W2taNFpd9evZfaZYd8sMJZfmjZWByAeDXc+Dvh/8K/2ndE8YaX4Q8F3Xw58a6JpkurWcceqzX9lqKRfeik8/LIxymCOOa4T9jn4keGvhb8ZF1rxXfSado82lXtlJdQ2z3HltLDtU4QE9zXbeGPiZ8Kf2a9B8VXfw+8Rar4+8ba9p0mlW19Npp06z02GX/WMqsTI8i4GBgLx0rJ819BmI3wR1/wCK/hT4GaDoXh7wvpt74ittQW0v4JnW4u1hnIkkvMocFChxt3fKcdflqz8H/wBmjw1q37RvgjwTq3jHQ/GWi6098Ls+F7ubdC0EErBJDJEhBLqvTPQ1Z0v4ueHbvw18AtLtfHl54H1PwpbakuoazDp80/2GWSd5Ihhf9YGUqp27gQcGvSNW/aW+F3hv44fB/wAWWt/b+J9Y0aS7XxR4o0jRH01b1ZomjRjbsFYugk3N8vPOKV5IDxDw/wDsmah4w+JkvhPQ/HPg3VRb6ZJq9xqtle3ElraQRSYZGbyN2/AzsC42nO6tyz+EsXhv4O/F06XJ4H+IOl6ZHpsreJrd52ubTzXYKtpuj27iUO/JXGf463Phf4u+E/wD+IXiu60r4hSeLNI1nwvqVgl0ujXNqIbqUARRbZFGSQPvCuB+E/xS8O+Ff2dPjH4T1S8eLXvEh006dD5LuJvJmcyZbb8u0Efe20XkxHuXx4/ZVHxM1T4f/wDCI634S0fXJvA+nSW/hiWc219qMmx3ldAE2bmBwMtztbPSvmDUvgV4g0j4V6N49uLiwj0vVNZk0KOz3ut1HcR7twlUpt2/IR97P+zX1TcfGT4JzePPhp8Vrnx5eXGteD/DdlYJ4StdHuBPdXcEUgA+0lfLVcyN3/h964bw38Y/h98Xvg4/g3x/4ql+H+qWfiufxJb3a6ZNe21yszOzw7YsuCpkfqMfdpRlJAVfBf7HUNr4g+L/AIR8aa1pNlr/AIT0a1vLXVPt0kemxSTiNw0jeVvKhZAv3fvVwXhD9l3UfFU3ia9m8Z+FtN8KeH7mOzufFVxdSmwmmcbljg/d+ZIdpyRtXrXtviD9on4ZeNvjt8aob7xDc6V4O8daHZ6daeITYSv9nmt4YFy1uB5hUvGw4Hb3rh/C/ib4TXHwv8T/AAY1rx7NYaAmvReItF8ZRaPM0U8gtlhkjkth+8VR8xU4zzT5pAcvpf7GfjPUfjDH4Aj1DRI57jSjrlrrX2l30+6scZWeJ0Us4PTG0GpdF/ZL/tu88Q3lp8SfCsng3QrS3uNQ8URtO1ujSsypDt2Bi/yMSMAdOa9f8NftS/Dnw18ZPD8VvqF6/gnwt4Fn8L2Wr3Fm5lv52GfM8rGQhPRSflrxj9lnx1p/w71HWdRufife/Dm5k8pTDHojana6jEPvpPGDhgueMj+I1XNKwHkPjDQrbwv4n1DTbPWLTX7e2k2JqmnhxDcL/s71Dn6EVjYAzx16/nmvSf2jfFnhHxv8ZPEOteBdK/sbwzdSRtbWwtxApIjVZHWIfcBcM23P8XHFebVcW2tQD375z+Pf8+/rRRRTAKKKKACiiigAYBjkgMfcZo555PPXnrRRQAevvRRRQAdwccjge309KPQZIAzgZ4GetFFAB1znnPX3o6AgcAjBHY9P8B+VFFAAMjoSOnQ4xjpS7jzgkZ680UUAJ/jnr3xjP49/XvSbQOgA6dBiiigBeOcADJ3HAxk+v14ooooAKKKKAP/Z';
+const GROWTH = 1.10;
+const SAFETY_DEFAULT = 6;
+const WEEKS_AHEAD    = 26;
+const STATE_SPLIT_DATE = '2026-09-01';
+
+// ═══ STATE ═════════════════════════════════════════════════════════════════
+let SKUS=[], SOH=[], POS=[], SALES_HIST=[], PROMOS=[];
+let STATE_VIEW='national'; // national | nsw | qld
+let db_ok = false;
+
+// ═══ SB HELPERS ════════════════════════════════════════════════════════════
+function sbH(){return{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'}}
+
+async function sbGet(table, extra=''){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${extra}`,{headers:sbH()});
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.message||r.status)}
+  return r.json();
+}
+
+async function sbUpsert(table, data, onConflict=''){
+  const url=`${SB_URL}/rest/v1/${table}${onConflict?'?on_conflict='+onConflict:''}`;
+  const r=await fetch(url,{method:'POST',headers:{...sbH(),'Prefer':'resolution=merge-duplicates,return=representation'},body:JSON.stringify(data)});
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.message||r.status)}
+  return r.json();
+}
+
+async function sbInsert(table, data){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:'POST',headers:sbH(),body:JSON.stringify(data)});
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.message||r.status)}
+  return r.json();
+}
+
+async function sbUpdate(table, data, filter){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${filter}`,{method:'PATCH',headers:sbH(),body:JSON.stringify(data)});
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.message||r.status)}
+  return r.json();
+}
+
+async function sbDelete(table, filter){
+  const headers={...sbH(),'Prefer':'return=representation'};
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${filter}`,{method:'DELETE',headers});
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.message||r.status)}
+  return r.ok;
+}
+
+// ═══ LOAD ══════════════════════════════════════════════════════════════════
+async function loadAll(){
+  spin(true);
+  try {
+    [SKUS,SOH,POS,SALES_HIST,PROMOS] = await Promise.all([
+      sbGet('agd_skus','select=*&order=brand,description&active=eq.true'),
+      sbGet('agd_stock_on_hand','select=*'),
+      sbGet('agd_purchase_orders','select=*&order=eta_date'),
+      sbGet('agd_sales_history','select=*&order=week_date'),
+      sbGet('agd_promos','select=*&order=promo_week'),
+    ]);
+    db_ok=true;
+    document.getElementById('setup-banner').style.display='none';
+    populateSelects();
+    renderAll();
+    const now=new Date().toLocaleString('en-AU',{timeZone:'Australia/Brisbane',hour12:false,day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    document.getElementById('last-refresh').textContent='Refreshed '+now+' AEST';
+    document.getElementById('footer-gen').textContent='Updated '+now;
+  } catch(e) {
+    db_ok=false;
+    if(e.message&&(e.message.includes('PGRST205')||e.message.includes('relation'))){
+      document.getElementById('setup-banner').style.display='block';
+    } else {
+      showBanner('Error loading data: '+e.message,'err');
+    }
+  }
+  spin(false);
+}
+
+function spin(on){document.getElementById('plan-spin').style.display=on?'inline-block':'none'}
+
+function populateSelects(){
+  const skuOpts=SKUS.map(s=>`<option value="${s.code}">${s.code} — ${s.description}</option>`).join('');
+  ['soh-sku','po-sku','sales-sku','promo-sku'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.innerHTML='<option value="">Select…</option>'+skuOpts;
+  });
+  // PO filter
+  const pof=document.getElementById('po-sku-filter');
+  if(pof)pof.innerHTML='<option value="all">All SKUs</option>'+skuOpts;
+  // Forecast filter
+  const ff=document.getElementById('fcast-sku');
+  if(ff)ff.innerHTML='<option value="all">All SKUs</option>'+skuOpts;
+  // Retailers for forecast
+  const retailers=[...new Set(SALES_HIST.map(r=>r.retailer))].sort();
+  const retOpts='<option value="all">All Retailers</option>'+retailers.map(r=>`<option>${r}</option>`).join('');
+  const fr=document.getElementById('fcast-retailer');
+  if(fr)fr.innerHTML=retOpts;
+}
+
+function renderAll(){
+  renderPlan();
+  renderStock();
+  renderPO();
+  renderForecast();
+  renderPromo();
+  renderSkuMaster();
+}
+
+// ═══ HELPERS ═══════════════════════════════════════════════════════════════
+function monday(d){
+  const dt=new Date(d||Date.now());
+  const day=dt.getDay();
+  const diff=day===0?-6:1-day;
+  dt.setDate(dt.getDate()+diff);
+  dt.setHours(0,0,0,0);
+  return dt;
+}
+
+function addWeeks(dt,n){const d=new Date(dt);d.setDate(d.getDate()+n*7);return d}
+
+function fmtDate(d){
+  if(!d)return'—';
+  const dt=new Date(d);
+  return ('0'+dt.getDate()).slice(-2)+'/'+('0'+(dt.getMonth()+1)).slice(-2)+'/'+dt.getFullYear();
+}
+
+function isoDate(d){
+  const dt=new Date(d);
+  return dt.getFullYear()+'-'+('0'+(dt.getMonth()+1)).slice(-2)+'-'+('0'+dt.getDate()).slice(-2);
+}
+
+function n(v,dec=0){return(v||0).toLocaleString('en-AU',{minimumFractionDigits:dec,maximumFractionDigits:dec})}
+
+function getSku(code){return SKUS.find(s=>s.code===code)||{code,description:code,carton_units:6,lead_max_wks:16,safety_wks:6}}
+
+function getSoh(sku_code){
+  const r=SOH.find(s=>s.sku_code===sku_code);
+  if(!r)return{cartons_qld:0,cartons_nsw:0};
+  return r;
+}
+
+function getCoverClass(wks){
+  if(wks<=0)return'wk-cell cov-zero';
+  if(wks<6)return'wk-cell cov-crit';
+  if(wks<12)return'wk-cell cov-warn';
+  return'wk-cell cov-ok';
+}
+
+// ═══ PLAN FORECASTING ══════════════════════════════════════════════════════
+function buildForecast(){
+  // Returns: {[sku_code]: {weekly_cartons, by_retailer:{retailer: weekly_cartons}}}
+  const out={};
+  const now=new Date();
+  const cutoff=new Date(now);cutoff.setFullYear(cutoff.getFullYear()-1);
+  SKUS.forEach(sku=>{
+    const hist=SALES_HIST.filter(h=>h.sku_code===sku.code&&new Date(h.week_date)>=cutoff);
+    const retailers=[...new Set(hist.map(h=>h.retailer))];
+    const totalCartons=hist.reduce((s,h)=>s+(h.cartons_sold||0),0);
+    const weeks=Math.max(hist.length/Math.max(retailers.length,1),1);
+    const avgWeekly=(totalCartons/52)*GROWTH;
+    const byRetailer={};
+    retailers.forEach(ret=>{
+      const retHist=hist.filter(h=>h.retailer===ret);
+      const retTotal=retHist.reduce((s,h)=>s+(h.cartons_sold||0),0);
+      const retWeekly=(retTotal/52)*GROWTH;
+      byRetailer[ret]=retWeekly;
+    });
+    out[sku.code]={weekly_cartons:avgWeekly,by_retailer:byRetailer};
+  });
+  return out;
+}
+
+function getPromoUplift(sku_code, weekIso){
+  const p=PROMOS.filter(p=>p.sku_code===sku_code&&p.promo_week===weekIso);
+  if(!p.length)return 0;
+  const fcast=buildForecast()[sku_code]||{weekly_cartons:0};
+  return p.reduce((s,promo)=>{
+    if(promo.uplift_type==='pct') return s+(fcast.weekly_cartons*(promo.uplift_value/100));
+    return s+(promo.uplift_value||0);
+  },0);
+}
+
+function getPOArrivals(sku_code, weekIso){
+  // Returns cartons arriving in this week
+  const wkStart=new Date(weekIso);
+  const wkEnd=addWeeks(wkStart,1);
+  return POS.filter(p=>p.sku_code===sku_code&&p.status!=='Cancelled'&&p.status!=='Arrived'&&p.eta_date&&new Date(p.eta_date)>=wkStart&&new Date(p.eta_date)<wkEnd)
+    .reduce((s,p)=>{
+      if(STATE_VIEW==='qld')return s+(p.cartons_qld||0);
+      if(STATE_VIEW==='nsw')return s+(p.cartons_nsw||0);
+      return s+(p.cartons_qld||0)+(p.cartons_nsw||0);
+    },0);
+}
+
+// ═══ RENDER PLAN ═══════════════════════════════════════════════════════════
+function setStateView(view, btn){
+  STATE_VIEW=view;
+  document.querySelectorAll('.state-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const afterSplit=new Date()>=new Date(STATE_SPLIT_DATE);
+  document.getElementById('state-mode-lbl').textContent=
+    view==='national'?'National view':
+    view==='qld'?(afterSplit?'QLD view':'QLD view (pre-split — Sept 2026)'):
+    (afterSplit?'NSW view':'NSW view (pre-split — Sept 2026)');
+  renderPlan();
+}
+
+function renderPlan(){
+  const brandF=document.getElementById('plan-brand').value;
+  const weeks=parseInt(document.getElementById('plan-weeks').value)||26;
+  const skus=SKUS.filter(s=>brandF==='all'||s.brand===brandF);
+  const fcast=buildForecast();
+
+  // Tiles
+  let totalCrit=0,totalWarn=0,totalOk=0,orderNow=0;
+  skus.forEach(sku=>{
+    const soh=getSoh(sku.code);
+    let stock=STATE_VIEW==='qld'?soh.cartons_qld:STATE_VIEW==='nsw'?soh.cartons_nsw:(soh.cartons_qld+soh.cartons_nsw);
+    const wkly=(fcast[sku.code]?.weekly_cartons||0);
+    const cover=wkly>0?stock/wkly:99;
+    if(cover<6)totalCrit++;else if(cover<12)totalWarn++;else totalOk++;
+    // Check if order window is open: projected stock at lead_max_wks from now < safety stock
+    const sku_lead=sku.lead_max_wks||16;
+    let proj=stock;
+    for(let w=0;w<sku_lead;w++){
+      const wkIso=isoDate(addWeeks(monday(),w));
+      const demand=(fcast[sku.code]?.weekly_cartons||0)+getPromoUplift(sku.code,wkIso);
+      proj+=getPOArrivals(sku.code,wkIso);
+      proj-=demand;
+    }
+    const projCover=wkly>0?proj/wkly:99;
+    if(projCover<sku.safety_wks||6)orderNow++;
+  });
+  document.getElementById('plan-tiles').innerHTML=`
+    <div class="tile red"><div class="tile-lbl">Critical &lt;6 wks</div><div class="tile-val">${totalCrit}</div><div class="tile-sub">SKUs needing urgent action</div></div>
+    <div class="tile amber"><div class="tile-lbl">Warning 6–12 wks</div><div class="tile-val">${totalWarn}</div><div class="tile-sub">Monitor closely</div></div>
+    <div class="tile green"><div class="tile-lbl">OK ≥12 wks</div><div class="tile-val">${totalOk}</div><div class="tile-sub">Adequate stock</div></div>
+    <div class="tile amber"><div class="tile-lbl">Order Window Open</div><div class="tile-val">${orderNow}</div><div class="tile-sub">Place PO within lead time</div></div>
+  `;
+
+  // Week headers
+  const today=monday();
+  const wkCols=[];
+  for(let i=0;i<weeks;i++){
+    const wkDt=addWeeks(today,i);
+    const wkIso=isoDate(wkDt);
+    const lbl=('0'+wkDt.getDate()).slice(-2)+'/'+('0'+(wkDt.getMonth()+1)).slice(-2);
+    wkCols.push({dt:wkDt,iso:wkIso,lbl});
+  }
+
+  let html=`<table class="grid-tbl"><thead><tr>
+    <th style="width:130px;text-align:left">SKU</th>
+    <th style="width:90px;text-align:left">Metric</th>
+    ${wkCols.map(w=>`<th class="wk-hdr">${w.lbl}</th>`).join('')}
+    <th style="background:#2c3e66">Order Alert</th>
+  </tr></thead><tbody>`;
+
+  skus.forEach(sku=>{
+    const soh=getSoh(sku.code);
+    let openStock=STATE_VIEW==='qld'?soh.cartons_qld:STATE_VIEW==='nsw'?soh.cartons_nsw:(soh.cartons_qld+soh.cartons_nsw);
+    const wklyFcast=fcast[sku.code]?.weekly_cartons||0;
+    const sku_lead=sku.lead_max_wks||16;
+    const sku_safety=sku.safety_wks||SAFETY_DEFAULT;
+
+    // Calculate week-by-week projection
+    const wkData=[];
+    let running=openStock;
+    let orderNowFlag=false;
+    let orderByWk=null;
+
+    wkCols.forEach((wk,i)=>{
+      const promo=getPromoUplift(sku.code,wk.iso);
+      const demand=wklyFcast+promo;
+      const arrivals=getPOArrivals(sku.code,wk.iso);
+      running=running+arrivals-demand;
+      if(running<0)running=0;
+      const cover=wklyFcast>0?running/wklyFcast:99;
+
+      // Flag order window: if projected stock at i+lead_max drops below safety
+      let reorder=false;
+      if(i===0){
+        let projected=running;
+        for(let j=1;j<=sku_lead&&i+j<weeks;j++){
+          const fwk=wkCols[i+j];
+          const fd=(fcast[sku.code]?.weekly_cartons||0)+getPromoUplift(sku.code,fwk.iso);
+          const fa=getPOArrivals(sku.code,fwk.iso);
+          projected=Math.max(0,projected+fa-fd);
+        }
+        const projCover=wklyFcast>0?projected/wklyFcast:99;
+        if(projCover<sku_safety){orderNowFlag=true;}
+      }
+
+      wkData.push({demand,arrivals,closing:running,cover,reorder:false,hasPromo:promo>0});
+    });
+
+    // Build 4-row block per SKU
+    html+=`<tr><td class="sku-lbl" colspan="${weeks+3}" style="color:#fff;font-size:9pt">
+      <strong>${sku.code}</strong> &nbsp; ${sku.description}
+      &nbsp; <span style="font-size:8pt;background:#0E7CCE;padding:1px 7px;border-radius:10px">${sku.brand}</span>
+      ${orderNowFlag?'&nbsp;<span style="background:#E67E22;color:#fff;font-size:8pt;padding:2px 8px;border-radius:10px">⚠ ORDER NOW — window open</span>':''}
+    </td></tr>`;
+
+    // Row 1: Forecast demand
+    html+=`<tr><td style="background:#f7f7f7" rowspan="1"></td><td class="row-lbl" style="color:#555">Forecast demand</td>`;
+    wkData.forEach(w=>{
+      const hasPr=w.hasPromo;
+      html+=`<td class="num ${hasPr?'promo-week':''}" style="color:${hasPr?'#7c5000':'#666'}">${n(w.demand,1)}</td>`;
+    });
+    html+=`<td rowspan="4" style="background:#f0f0f0;text-align:center;vertical-align:middle;font-size:8pt">
+      ${orderNowFlag?`<span style="color:var(--amber);font-weight:bold">⚠ PLACE ORDER<br>Lead: ${sku_lead} wks</span>`:'<span style="color:var(--green)">OK</span>'}
+    </td></tr>`;
+
+    // Row 2: PO arrivals
+    html+=`<tr><td></td><td class="row-lbl" style="color:#0E7CCE">PO arrivals</td>`;
+    wkData.forEach(w=>{
+      html+=`<td class="num" style="color:${w.arrivals>0?'#0E7CCE':'#ccc'};font-weight:${w.arrivals>0?'bold':'normal'}">${w.arrivals>0?n(w.arrivals):'-'}</td>`;
+    });
+    html+='</tr>';
+
+    // Row 3: Closing stock
+    html+=`<tr><td></td><td class="row-lbl">Closing stock</td>`;
+    wkData.forEach(w=>{html+=`<td class="num">${n(w.closing)}</td>`;});
+    html+='</tr>';
+
+    // Row 4: Weeks cover (colour coded)
+    html+=`<tr><td></td><td class="row-lbl" style="font-weight:bold">Weeks cover</td>`;
+    wkData.forEach(w=>{
+      const cls=getCoverClass(w.cover);
+      const cv=w.cover>=99?'∞':n(w.cover,1);
+      html+=`<td class="${cls}">${cv}</td>`;
+    });
+    html+='</tr>';
+  });
+
+  html+='</tbody></table>';
+  document.getElementById('plan-grid').innerHTML=html;
+}
+
+// ═══ RENDER STOCK ══════════════════════════════════════════════════════════
+function renderStock(){
+  let html='';let totQld=0,totNsw=0,totUnits=0;
+  SKUS.forEach(sku=>{
+    const soh=getSoh(sku.code);
+    const nat=(soh.cartons_qld||0)+(soh.cartons_nsw||0);
+    const units=nat*(sku.carton_units||6);
+    totQld+=soh.cartons_qld||0;totNsw+=soh.cartons_nsw||0;totUnits+=units;
+    html+=`<tr>
+      <td>${sku.code}</td><td>${sku.description}</td>
+      <td><span class="badge ${sku.brand==='Oatly'?'badge-ok':'badge-warn'}">${sku.brand}</span></td>
+      <td class="num">${n(soh.cartons_qld)}</td>
+      <td class="num">${n(soh.cartons_nsw)}</td>
+      <td class="num"><strong>${n(nat)}</strong></td>
+      <td class="num">${n(units)}</td>
+      <td>${fmtDate(soh.as_at_date)}</td>
+      <td style="font-size:8pt;color:#888">${soh.notes||''}</td>
+      <td><button class="btn btn-grey" style="font-size:8pt;padding:3px 8px" onclick="editSoh('${sku.code}')">Edit</button></td>
+    </tr>`;
+  });
+  document.getElementById('stock-tbody').innerHTML=html||'<tr><td colspan="10" style="padding:20px;color:#888;text-align:center">No stock data. Add via Setup.</td></tr>';
+  document.getElementById('soh-tot-qld').textContent=n(totQld);
+  document.getElementById('soh-tot-nsw').textContent=n(totNsw);
+  document.getElementById('soh-tot-nat').textContent=n(totQld+totNsw);
+  document.getElementById('soh-tot-units').textContent=n(totUnits);
+}
+
+function editSoh(sku_code){
+  const soh=getSoh(sku_code);
+  document.getElementById('soh-edit-id').value=soh.id||'';
+  document.getElementById('soh-sku').value=sku_code;
+  document.getElementById('soh-qld').value=soh.cartons_qld||0;
+  document.getElementById('soh-nsw').value=soh.cartons_nsw||0;
+  document.getElementById('soh-date').value=isoDate(soh.as_at_date||new Date());
+  document.getElementById('soh-notes').value=soh.notes||'';
+  openModal('modal-soh');
+}
+
+async function saveSoh(){
+  const sku_code=document.getElementById('soh-sku').value;
+  if(!sku_code){showBanner('Select a SKU','err');return;}
+  const payload={
+    sku_code,
+    cartons_qld:parseInt(document.getElementById('soh-qld').value)||0,
+    cartons_nsw:parseInt(document.getElementById('soh-nsw').value)||0,
+    as_at_date:document.getElementById('soh-date').value,
+    notes:document.getElementById('soh-notes').value,
+    updated_at:new Date().toISOString()
+  };
+  try{
+    await sbUpsert('agd_stock_on_hand',payload,'sku_code');
+    await loadAll();
+    closeModal('modal-soh');
+    showBanner('Stock updated','ok');
+  }catch(e){showBanner('Error: '+e.message,'err')}
+}
+
+// ═══ RENDER PO ═════════════════════════════════════════════════════════════
+function renderPO(){
+  const sf=document.getElementById('po-status-filter').value;
+  const skuF=document.getElementById('po-sku-filter').value;
+  let pos=POS.filter(p=>(sf==='all'||p.status===sf)&&(skuF==='all'||p.sku_code===skuF));
+  const active=POS.filter(p=>p.status!=='Cancelled'&&p.status!=='Arrived');
+  const totQ=active.reduce((s,p)=>s+(p.cartons_qld||0),0);
+  const totN=active.reduce((s,p)=>s+(p.cartons_nsw||0),0);
+  const today=new Date();
+
+  let html='';
+  pos.forEach(p=>{
+    const sku=getSku(p.sku_code);
+    const eta=p.eta_date?new Date(p.eta_date):null;
+    const weeksOut=eta?Math.round((eta-today)/(7*86400000)):null;
+    const tot=(p.cartons_qld||0)+(p.cartons_nsw||0);
+    const statusCls=p.status==='Arrived'?'badge-ok':p.status==='Cancelled'?'badge-warn':p.status==='On Water'?'badge-ok':'badge-warn';
+    html+=`<tr class="${p.status==='Cancelled'?'':''}">
+      <td>${p.po_number}</td>
+      <td><strong>${p.sku_code}</strong><br><span style="font-size:8pt;color:#888">${sku.description}</span></td>
+      <td>${p.supplier||'—'}</td>
+      <td class="num">${n(p.cartons_qld)}</td>
+      <td class="num">${n(p.cartons_nsw)}</td>
+      <td class="num"><strong>${n(tot)}</strong></td>
+      <td>${fmtDate(p.order_date)}</td>
+      <td>${fmtDate(p.eta_date)}</td>
+      <td class="num" style="color:${weeksOut!==null&&weeksOut<8?'var(--red)':'inherit'};font-weight:${weeksOut!==null&&weeksOut<8?'bold':'normal'}">
+        ${weeksOut!==null?weeksOut+' wks':'—'}
+      </td>
+      <td><span class="badge ${statusCls}">${p.status}</span></td>
+      <td style="font-size:8pt;color:#888">${p.notes||''}</td>
+      <td><button class="btn btn-grey" style="font-size:8pt;padding:3px 8px" onclick="editPO(${p.id})">Edit</button></td>
+    </tr>`;
+  });
+  document.getElementById('po-tbody').innerHTML=html||'<tr><td colspan="12" style="padding:20px;color:#888;text-align:center">No POs. Add via button above.</td></tr>';
+  document.getElementById('po-tot-qld').textContent=n(totQ);
+  document.getElementById('po-tot-nsw').textContent=n(totN);
+  document.getElementById('po-tot-nat').textContent=n(totQ+totN);
+
+  // Summary tiles
+  const onWater=POS.filter(p=>p.status==='On Water').length;
+  const placed=POS.filter(p=>p.status==='Placed').length;
+  const imminent=POS.filter(p=>p.status!=='Cancelled'&&p.status!=='Arrived'&&p.eta_date&&(new Date(p.eta_date)-today)/(7*86400000)<4).length;
+  document.getElementById('po-tiles').innerHTML=`
+    <div class="tile blue"><div class="tile-lbl">On Water</div><div class="tile-val">${onWater}</div><div class="tile-sub">containers in transit</div></div>
+    <div class="tile"><div class="tile-lbl">Placed</div><div class="tile-val">${placed}</div><div class="tile-sub">orders awaiting shipment</div></div>
+    <div class="tile ${imminent>0?'amber':'green'}"><div class="tile-lbl">Due &lt;4 Weeks</div><div class="tile-val">${imminent}</div><div class="tile-sub">arriving soon</div></div>
+    <div class="tile"><div class="tile-lbl">Total Active (Nat)</div><div class="tile-val">${n(totQ+totN)}</div><div class="tile-sub">cartons on order</div></div>
+  `;
+}
+
+function editPO(id){
+  const p=POS.find(p=>p.id===id);
+  if(!p)return;
+  document.getElementById('po-edit-id').value=p.id;
+  document.getElementById('po-num').value=p.po_number||'';
+  document.getElementById('po-sku').value=p.sku_code||'';
+  document.getElementById('po-supplier').value=p.supplier||'';
+  document.getElementById('po-status').value=p.status||'Placed';
+  document.getElementById('po-qld').value=p.cartons_qld||0;
+  document.getElementById('po-nsw').value=p.cartons_nsw||0;
+  document.getElementById('po-order-date').value=p.order_date||'';
+  document.getElementById('po-eta').value=p.eta_date||'';
+  document.getElementById('po-notes').value=p.notes||'';
+  document.getElementById('po-del-btn').style.display='inline-block';
+  openModal('modal-po');
+}
+
+async function savePO(){
+  const id=document.getElementById('po-edit-id').value;
+  const sku_code=document.getElementById('po-sku').value;
+  if(!sku_code){showBanner('Select a SKU','err');return;}
+  const payload={
+    po_number:document.getElementById('po-num').value,
+    sku_code,
+    supplier:document.getElementById('po-supplier').value,
+    status:document.getElementById('po-status').value,
+    cartons_qld:parseInt(document.getElementById('po-qld').value)||0,
+    cartons_nsw:parseInt(document.getElementById('po-nsw').value)||0,
+    order_date:document.getElementById('po-order-date').value||null,
+    eta_date:document.getElementById('po-eta').value||null,
+    notes:document.getElementById('po-notes').value||null
+  };
+  try{
+    if(id){await sbUpdate('agd_purchase_orders',payload,'id=eq.'+id);}
+    else{await sbInsert('agd_purchase_orders',payload);}
+    await loadAll();closeModal('modal-po');showBanner('PO saved','ok');
+    document.getElementById('po-del-btn').style.display='none';
+    document.getElementById('po-edit-id').value='';
+  }catch(e){showBanner('Error: '+e.message,'err')}
+}
+
+async function deletePO(){
+  const id=document.getElementById('po-edit-id').value;
+  if(!id)return;
+  if(!confirm('Delete this PO?'))return;
+  try{
+    await sbDelete('agd_purchase_orders','id=eq.'+id);
+    await loadAll();closeModal('modal-po');showBanner('PO deleted','ok');
+  }catch(e){showBanner('Error: '+e.message,'err')}
+}
+
+// ═══ RENDER FORECAST ═══════════════════════════════════════════════════════
+function renderForecast(){
+  const skuF=document.getElementById('fcast-sku').value;
+  const retF=document.getElementById('fcast-retailer').value;
+  const fcast=buildForecast();
+  const weeks=26;
+  const today=monday();
+  const wkCols=[];
+  for(let i=0;i<weeks;i++){
+    const dt=addWeeks(today,i);
+    wkCols.push({dt,iso:isoDate(dt),lbl:('0'+dt.getDate()).slice(-2)+'/'+('0'+(dt.getMonth()+1)).slice(-2)});
+  }
+
+  const skus=SKUS.filter(s=>skuF==='all'||s.code===skuF);
+  let grandTotal26=0,grandWeekly=0;
+  let html=`<table class="fcast-table" style="width:100%;border-collapse:collapse">
+    <thead><tr>
+      <th style="text-align:left;width:160px">SKU / Retailer</th>
+      <th class="num">Avg Weekly</th>
+      <th class="num">26-Week Total</th>
+      ${wkCols.map(w=>`<th class="num" style="min-width:56px">${w.lbl}</th>`).join('')}
+    </tr></thead><tbody>`;
+
+  skus.forEach(sku=>{
+    const skuFcast=fcast[sku.code]||{weekly_cartons:0,by_retailer:{}};
+    const retailers=Object.keys(skuFcast.by_retailer).filter(r=>retF==='all'||r===retF).sort();
+    if(!retailers.length&&retF!=='all')return;
+
+    // SKU header row
+    html+=`<tr class="retailer-hdr" style="background:#2c3e66;color:#fff">
+      <td style="padding:5px 8px;font-weight:bold" colspan="3">${sku.code} — ${sku.description}</td>
+      ${wkCols.map(()=>'<td></td>').join('')}
+    </tr>`;
+
+    if(retailers.length){
+      retailers.forEach(ret=>{
+        const wkly=skuFcast.by_retailer[ret]||0;
+        const total26=wkly*26;
+        grandTotal26+=total26;grandWeekly+=wkly;
+        const retCls=ret.toLowerCase().includes('woolworth')?'ret-ww':ret.toLowerCase().includes('coles')?'ret-coles':'ret-other';
+        html+=`<tr class="${retCls}">
+          <td style="padding:4px 8px 4px 20px;font-size:8pt">${ret}</td>
+          <td class="num">${n(wkly,1)}</td>
+          <td class="num">${n(total26,0)}</td>`;
+        wkCols.forEach(wk=>{
+          const promo=PROMOS.filter(p=>p.sku_code===sku.code&&p.retailer===ret&&p.promo_week===wk.iso);
+          let adj=wkly;
+          promo.forEach(p=>{if(p.uplift_type==='pct')adj+=wkly*(p.uplift_value/100);else adj+=p.uplift_value||0;});
+          const isPromo=promo.length>0;
+          html+=`<td class="num ${isPromo?'promo-week':''}" style="color:${isPromo?'#7c5000':'inherit'}">${n(adj,1)}</td>`;
+        });
+        html+='</tr>';
+      });
+    } else {
+      // No history — show placeholder
+      const wkly=0;
+      html+=`<tr><td style="padding:4px 8px 4px 20px;font-size:8pt;color:#888" colspan="3">No sales history — add via <em>Enter Sales History</em></td>${wkCols.map(()=>'<td></td>').join('')}</tr>`;
+    }
+
+    // SKU subtotal
+    const skuRetailers=Object.values(skuFcast.by_retailer);
+    const skuWkly=skuRetailers.reduce((s,v)=>s+v,0);
+    html+=`<tr style="background:#eef2f7;font-weight:bold">
+      <td style="padding:4px 8px">SKU Total</td>
+      <td class="num">${n(skuWkly,1)}</td>
+      <td class="num">${n(skuWkly*26,0)}</td>`;
+    wkCols.forEach(wk=>{
+      const promo=getPromoUplift(sku.code,wk.iso);
+      html+=`<td class="num">${n(skuWkly+promo,1)}</td>`;
+    });
+    html+='</tr>';
+  });
+
+  html+=`</tbody><tfoot><tr style="background:#1B2A4A;color:#fff;font-weight:bold">
+    <td style="padding:6px 8px">GRAND TOTAL</td>
+    <td class="num">${n(grandWeekly,1)}</td>
+    <td class="num">${n(grandTotal26,0)}</td>
+    ${wkCols.map(()=>'<td></td>').join('')}
+  </tr></tfoot></table>`;
+
+  document.getElementById('fcast-grid-wrap').innerHTML=`<div style="overflow-x:auto">${html}</div>`;
+
+  // Tiles
+  const histSkus=[...new Set(SALES_HIST.map(h=>h.sku_code))];
+  document.getElementById('fcast-tiles').innerHTML=`
+    <div class="tile"><div class="tile-lbl">SKUs with history</div><div class="tile-val">${histSkus.length}</div><div class="tile-sub">of ${SKUS.length} total</div></div>
+    <div class="tile blue"><div class="tile-lbl">Forecast 26-wk total</div><div class="tile-val">${n(grandTotal26)}</div><div class="tile-sub">cartons (×1.10 growth)</div></div>
+    <div class="tile amber"><div class="tile-lbl">Active Promos</div><div class="tile-val">${PROMOS.length}</div><div class="tile-sub">in next 26 weeks</div></div>
+  `;
+}
+
+// ═══ SALES HISTORY FORM ════════════════════════════════════════════════════
+function loadSalesForm(){
+  const sku_code=document.getElementById('sales-sku').value;
+  const retailer=document.getElementById('sales-retailer').value;
+  if(!sku_code||!retailer){document.getElementById('sales-form-rows').innerHTML='';return;}
+  const today=monday();
+  let html='<table style="width:100%;border-collapse:collapse;font-size:8.5pt">';
+  html+='<tr><th style="text-align:left;padding:4px 8px;background:#1B2A4A;color:#fff">Week</th><th style="background:#1B2A4A;color:#fff;padding:4px 8px;text-align:right">Cartons Sold</th></tr>';
+  for(let i=51;i>=0;i--){
+    const wkDt=addWeeks(today,-i-1);
+    const wkIso=isoDate(wkDt);
+    const existing=SALES_HIST.find(h=>h.sku_code===sku_code&&h.retailer===retailer&&h.week_date===wkIso);
+    html+=`<tr style="background:${i%2===0?'#f5f5f5':'#fff'}">
+      <td style="padding:3px 8px">${fmtDate(wkIso)}</td>
+      <td style="padding:3px 8px;text-align:right">
+        <input type="number" data-week="${wkIso}" class="sales-row" min="0" step="0.5" value="${existing?existing.cartons_sold:0}" style="width:90px;text-align:right">
+      </td>
+    </tr>`;
+  }
+  html+='</table>';
+  document.getElementById('sales-form-rows').innerHTML=html;
+}
+
+async function saveSalesHistory(){
+  const sku_code=document.getElementById('sales-sku').value;
+  const retailer=document.getElementById('sales-retailer').value;
+  if(!sku_code||!retailer){showBanner('Select SKU and retailer','err');return;}
+  const rows=[...document.querySelectorAll('.sales-row')];
+  const payload=rows.map(r=>({
+    sku_code,retailer,week_date:r.dataset.week,cartons_sold:parseFloat(r.value)||0
+  })).filter(r=>r.cartons_sold>0);
+  try{
+    if(payload.length)await sbUpsert('agd_sales_history',payload,'sku_code,retailer,week_date');
+    await loadAll();closeModal('modal-sales');showBanner(`Saved ${payload.length} weeks of history`,'ok');
+  }catch(e){showBanner('Error: '+e.message,'err')}
+}
+
+// ═══ RENDER PROMO ══════════════════════════════════════════════════════════
+function renderPromo(){
+  const brandF=document.getElementById('promo-brand-filter').value;
+  const skus=SKUS.filter(s=>brandF==='all'||s.brand===brandF);
+  const today=monday();
+  const wkCols=[];
+  for(let i=0;i<26;i++){
+    const dt=addWeeks(today,i);
+    wkCols.push({dt,iso:isoDate(dt),lbl:('0'+dt.getDate()).slice(-2)+'/'+('0'+(dt.getMonth()+1)).slice(-2)});
+  }
+
+  // Grid
+  let html=`<table class="promo-grid"><thead><tr>
+    <th style="text-align:left;width:200px">SKU</th>
+    ${wkCols.map(w=>`<th>${w.lbl}</th>`).join('')}
+  </tr></thead><tbody>`;
+  skus.forEach(sku=>{
+    html+=`<tr><td style="padding:3px 6px;font-size:8pt"><strong>${sku.code}</strong><br>${sku.description.slice(0,30)}…</td>`;
+    wkCols.forEach(wk=>{
+      const promos=PROMOS.filter(p=>p.sku_code===sku.code&&p.promo_week===wk.iso);
+      if(promos.length){
+        const p=promos[0];
+        const lbl=p.uplift_type==='pct'?`+${p.uplift_value}%`:`+${p.uplift_value}`;
+        html+=`<td class="promo-cell" onclick="editPromoById(${p.id})" title="${p.retailer}: ${lbl}">${lbl}</td>`;
+      } else {
+        html+=`<td onclick="newPromoWeek('${sku.code}','${wk.iso}')" style="cursor:pointer;color:#ddd;text-align:center" title="Add promo">+</td>`;
+      }
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById('promo-grid-wrap').innerHTML=html;
+
+  // Promo list table
+  let thtml='';
+  const futurePromos=PROMOS.filter(p=>p.promo_week>=isoDate(today));
+  futurePromos.forEach(p=>{
+    const sku=getSku(p.sku_code);
+    thtml+=`<tr>
+      <td><strong>${p.sku_code}</strong></td><td>${p.retailer}</td>
+      <td>${fmtDate(p.promo_week)}</td>
+      <td>${p.uplift_type==='pct'?'%':'Cartons'}</td>
+      <td class="num">${p.uplift_value}</td>
+      <td style="font-size:8pt;color:#888">${p.notes||''}</td>
+      <td><button class="btn btn-grey" style="font-size:8pt;padding:3px 8px" onclick="editPromoById(${p.id})">Edit</button></td>
+    </tr>`;
+  });
+  document.getElementById('promo-tbody').innerHTML=thtml||'<tr><td colspan="7" style="padding:16px;color:#888;text-align:center">No upcoming promos</td></tr>';
+
+  // Tiles
+  const thisMonth=PROMOS.filter(p=>{const d=new Date(p.promo_week);return d>=today&&d<addWeeks(today,4);});
+  document.getElementById('promo-tiles').innerHTML=`
+    <div class="tile amber"><div class="tile-lbl">Promos Next 4 Weeks</div><div class="tile-val">${thisMonth.length}</div><div class="tile-sub">active promotional events</div></div>
+    <div class="tile"><div class="tile-lbl">Total Promos (26 wks)</div><div class="tile-val">${futurePromos.length}</div><div class="tile-sub">across all SKUs</div></div>
+  `;
+}
+
+function newPromoWeek(sku_code, weekIso){
+  document.getElementById('promo-edit-id').value='';
+  document.getElementById('promo-del-btn').style.display='none';
+  document.getElementById('promo-sku').value=sku_code;
+  document.getElementById('promo-week').value=weekIso;
+  document.getElementById('promo-uplift-val').value=20;
+  document.getElementById('promo-notes').value='';
+  openModal('modal-promo');
+}
+
+function editPromoById(id){
+  const p=PROMOS.find(p=>p.id===id);if(!p)return;
+  document.getElementById('promo-edit-id').value=p.id;
+  document.getElementById('promo-del-btn').style.display='inline-block';
+  document.getElementById('promo-sku').value=p.sku_code;
+  document.getElementById('promo-retailer').value=p.retailer;
+  document.getElementById('promo-week').value=p.promo_week;
+  document.getElementById('promo-uplift-type').value=p.uplift_type;
+  document.getElementById('promo-uplift-val').value=p.uplift_value;
+  document.getElementById('promo-notes').value=p.notes||'';
+  openModal('modal-promo');
+}
+
+async function savePromo(){
+  const id=document.getElementById('promo-edit-id').value;
+  const payload={
+    sku_code:document.getElementById('promo-sku').value,
+    retailer:document.getElementById('promo-retailer').value,
+    promo_week:document.getElementById('promo-week').value,
+    uplift_type:document.getElementById('promo-uplift-type').value,
+    uplift_value:parseFloat(document.getElementById('promo-uplift-val').value)||0,
+    notes:document.getElementById('promo-notes').value||null
+  };
+  if(!payload.sku_code||!payload.promo_week){showBanner('Select SKU and week','err');return;}
+  try{
+    if(id){await sbUpdate('agd_promos',payload,'id=eq.'+id);}
+    else{await sbInsert('agd_promos',payload);}
+    await loadAll();closeModal('modal-promo');showBanner('Promo saved','ok');
+  }catch(e){showBanner('Error: '+e.message,'err')}
+}
+
+async function deletePromo(){
+  const id=document.getElementById('promo-edit-id').value;if(!id)return;
+  if(!confirm('Delete this promo?'))return;
+  try{await sbDelete('agd_promos','id=eq.'+id);await loadAll();closeModal('modal-promo');showBanner('Promo deleted','ok');}
+  catch(e){showBanner('Error: '+e.message,'err')}
+}
+
+// ═══ RENDER SKU MASTER ═════════════════════════════════════════════════════
+function renderSkuMaster(){
+  let html='';
+  SKUS.forEach(sku=>{
+    html+=`<tr>
+      <td>${sku.code}</td><td>${sku.description}</td>
+      <td><span class="badge ${sku.brand==='Oatly'?'badge-ok':'badge-warn'}">${sku.brand}</span></td>
+      <td>${sku.supplier||'—'}</td>
+      <td class="num">${sku.carton_units}</td>
+      <td class="num">${sku.lead_min_wks}</td>
+      <td class="num">${sku.lead_max_wks}</td>
+      <td class="num">${sku.safety_wks}</td>
+      <td><span class="badge ${sku.active?'badge-ok':'badge-warn'}">${sku.active?'Active':'Inactive'}</span></td>
+      <td><button class="btn btn-grey" style="font-size:8pt;padding:3px 8px" onclick="editSku(${sku.id})">Edit</button></td>
+    </tr>`;
+  });
+  document.getElementById('sku-tbody').innerHTML=html||'<tr><td colspan="10" style="padding:20px;color:#888;text-align:center">No SKUs. Run setup.sql first.</td></tr>';
+}
+
+function editSku(id){
+  const sku=SKUS.find(s=>s.id===id);if(!sku)return;
+  document.getElementById('sku-edit-id').value=sku.id;
+  document.getElementById('sku-code').value=sku.code;
+  document.getElementById('sku-desc').value=sku.description;
+  document.getElementById('sku-brand').value=sku.brand;
+  document.getElementById('sku-supplier').value=sku.supplier||'';
+  document.getElementById('sku-carton-units').value=sku.carton_units;
+  document.getElementById('sku-lead-min').value=sku.lead_min_wks;
+  document.getElementById('sku-lead-max').value=sku.lead_max_wks;
+  document.getElementById('sku-safety').value=sku.safety_wks;
+  document.getElementById('sku-active').value=String(sku.active);
+  openModal('modal-sku');
+}
+
+async function saveSku(){
+  const id=document.getElementById('sku-edit-id').value;
+  const payload={
+    code:document.getElementById('sku-code').value,
+    description:document.getElementById('sku-desc').value,
+    brand:document.getElementById('sku-brand').value,
+    supplier:document.getElementById('sku-supplier').value||null,
+    carton_units:parseInt(document.getElementById('sku-carton-units').value)||6,
+    lead_min_wks:parseInt(document.getElementById('sku-lead-min').value)||12,
+    lead_max_wks:parseInt(document.getElementById('sku-lead-max').value)||16,
+    safety_wks:parseInt(document.getElementById('sku-safety').value)||6,
+    active:document.getElementById('sku-active').value==='true'
+  };
+  if(!payload.code||!payload.description){showBanner('Code and description required','err');return;}
+  try{
+    if(id){await sbUpdate('agd_skus',payload,'id=eq.'+id);}
+    else{await sbUpsert('agd_skus',payload,'code');}
+    await loadAll();closeModal('modal-sku');showBanner('SKU saved','ok');
+  }catch(e){showBanner('Error: '+e.message,'err')}
+}
+
+// ═══ UI UTILS ══════════════════════════════════════════════════════════════
+function showTab(id,btn){
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('pane-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  // Reset edit IDs
+  const editId=document.querySelector('#'+id+' input[type=hidden]');
+  if(editId)editId.value='';
+  const delBtn=document.querySelector('#'+id+' .btn-red[id$="-del-btn"]');
+  if(delBtn)delBtn.style.display='none';
+}
+
+function showBanner(msg,type='info'){
+  const b=document.getElementById('status-banner');
+  b.className='banner '+(type==='ok'?'ok':type==='err'?'err':'info');
+  b.textContent=msg;
+  b.style.display='block';
+  setTimeout(()=>b.style.display='none',4000);
+}
+
+// ═══ INIT ══════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('agd-logo').src=LOGO;
+  document.getElementById('soh-date').value=new Date().toISOString().slice(0,10);
+  loadAll();
+});
+</script>
+</body>
+</html>
