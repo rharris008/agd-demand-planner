@@ -506,6 +506,43 @@ const SAFETY_DEFAULT = 6;
 const WEEKS_AHEAD    = 26;
 const STATE_SPLIT_DATE = '2026-09-01';
 
+// Static fallbacks — active until patch_07082026.sql is run in Supabase
+// Source: NS extract 07/08/2026. Growth applied in buildForecast().
+const STATIC_WEEKLY_RATES = {
+  'FG 61737': 174,
+  'FG 61739': 14,
+  'FG 61740': 5,
+  'FG 62059': 30,
+  'FG 62060': 0,
+  'FG 62106': 4,
+  'FG 62108': 113,
+  'FG 62322': 33,
+  'FG PerfectTed Vanilla Matcha Powder 75g': 0,
+  'FG PerfectTed Strawberry Matcha Powder 75g': 0,
+  'FG PerfectTed Original Matcha Powder 30g': 0,
+  'FG PerfectTed Matcha Non Organic 250g': 0,
+  'FG PerfectTed Matcha Latte Vanilla 250ml': 0,
+  'FG PerfectTed - Apple Raspberry 250ml': 0,
+  'FG PerfectTed - Juicy Peach 250ml': 0
+};
+const STATIC_COMMITTED = {
+  'FG 61737': 2437,
+  'FG 61739': 184,
+  'FG 61740': 70,
+  'FG 62059': 136,
+  'FG 62060': 0,
+  'FG 62106': 46,
+  'FG 62108': 793,
+  'FG 62322': 163,
+  'FG PerfectTed Vanilla Matcha Powder 75g': 0,
+  'FG PerfectTed Strawberry Matcha Powder 75g': 0,
+  'FG PerfectTed Original Matcha Powder 30g': 0,
+  'FG PerfectTed Matcha Non Organic 250g': 0,
+  'FG PerfectTed Matcha Latte Vanilla 250ml': 0,
+  'FG PerfectTed - Apple Raspberry 250ml': 0,
+  'FG PerfectTed - Juicy Peach 250ml': 0
+};
+
 // ═══ STATE ═════════════════════════════════════════════════════════════════
 let SKUS=[], SOH=[], POS=[], SALES_HIST=[], PROMOS=[];
 let STATE_VIEW='national'; // national | nsw | qld
@@ -621,7 +658,7 @@ function buildAlerts(){
     const fromDefault=fcast[sku.code]?.from_default||false;
     const sku_lead=sku.lead_max_wks||16;
     const sku_safety=sku.safety_wks||SAFETY_DEFAULT;
-    const cover=wkly>0?netAvail/wkly:99;
+    const cover=wkly>0?netAvail/wkly:null;
 
     // CRITICAL: can't fulfil current SOs
     if(netAvail<0){
@@ -667,8 +704,8 @@ function buildAlerts(){
       wkCols.forEach(wkIso=>{
         proj=Math.max(0,proj+getPOArrivals(sku.code,wkIso)-(wkly+getPromoUplift(sku.code,wkIso)));
       });
-      const projCover=wkly>0?proj/wkly:99;
-      if(projCover<sku_safety&&cover>=6){
+      const projCover=wkly>0?proj/wkly:null;
+      if(projCover!==null&&projCover<sku_safety&&cover!==null&&cover>=6){
         alerts.warning.push({
           sku:sku.code,desc:sku.description,
           title:'Order Window Open — Place PO Now',
@@ -678,7 +715,7 @@ function buildAlerts(){
         });
       }
       // WARNING: 6–12 weeks cover
-      else if(wkly>0&&cover>=6&&cover<12){
+      else if(wkly>0&&cover!==null&&cover>=6&&cover<12){
         alerts.warning.push({
           sku:sku.code,desc:sku.description,
           title:'Low Stock — 6 to 12 Weeks Cover',
@@ -828,7 +865,9 @@ function getSku(code){return SKUS.find(s=>s.code===code)||{code,description:code
 
 function getSoh(sku_code){
   const r=SOH.find(s=>s.sku_code===sku_code);
-  if(!r)return{cartons_qld:0,cartons_nsw:0};
+  if(!r)return{cartons_qld:0,cartons_nsw:0,committed_cartons:STATIC_COMMITTED[sku_code]||0};
+  // committed_cartons column may not exist until patch_07082026.sql is run
+  if(r.committed_cartons==null)r.committed_cartons=STATIC_COMMITTED[sku_code]||0;
   return r;
 }
 
@@ -848,8 +887,8 @@ function buildForecast(){
   SKUS.forEach(sku=>{
     const hist=SALES_HIST.filter(h=>h.sku_code===sku.code&&new Date(h.week_date)>=cutoff);
     if(hist.length===0){
-      // Fall back to SKU-level default (derived from recent SO patterns + 10% growth)
-      const base=(sku.default_weekly_cartons||0)*GROWTH;
+      // Fall back to SKU-level default, then static rates if DB column not yet present
+      const base=((sku.default_weekly_cartons||0)||STATIC_WEEKLY_RATES[sku.code]||0)*GROWTH;
       out[sku.code]={weekly_cartons:base,by_retailer:{},from_default:true};
       return;
     }

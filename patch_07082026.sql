@@ -41,4 +41,11 @@ UPDATE agd_skus SET default_weekly_cartons=0    WHERE code='FG 62060'; -- no his
 UPDATE agd_skus SET default_weekly_cartons=4    WHERE code='FG 62106';
 UPDATE agd_skus SET default_weekly_cartons=113  WHERE code='FG 62108';
 UPDATE agd_skus SET default_weekly_cartons=33   WHERE code='FG 62322';
-UPDATE agd_skus SET default_weekly_cartons=0    WHERE code='FG PerfTed';
+-- PerfectTed — all zero until actuals confirmed with Richard
+UPDATE agd_skus SET default_weekly_cartons=0 WHERE code='FG PerfectTed Vanilla Matcha Powder 75g';
+UPDATE agd_skus SET default_weekly_cartons=0 WHERE code='FG PerfectTed Strawberry Matcha Powder 75g';
+UPDATE agd_skus SET default_weekly_cartons=0 WHERE code='FG PerfectTed Original Matcha Powder 30g';
+UPDATE agd_skus SET default_weekly_cartons=0 WHERE code='FG PerfectTed Matcha Non Organic 250g';
+UPDATE agd_skus SET default_weekly_cartons=0 WHERE code='FG PerfectTed Matcha Latte Vanilla 250ml';
+UPDATE agd_skus SET default_weekly_cartons=0 WHERE code='FG PerfectTed - Apple Raspberry 250ml';
+UPDATE agd_skus SET default_weekly_cartons=0 WHERE code='FG PerfectTed - Juicy Peach 250ml';
