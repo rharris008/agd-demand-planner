@@ -506,15 +506,11 @@ const SAFETY_DEFAULT = 6;
 const WEEKS_AHEAD    = 26;
 const STATE_SPLIT_DATE = '2026-09-01';
 
-// Static fallbacks — active until patch_07082026.sql is run in Supabase
+// Static fallbacks — active SKUs only (patch_08082026.sql: FG 61739/61740/62060/62106 discontinued per Sharon Salt 08/08/2026)
 // Source: NS extract 07/08/2026. Growth applied in buildForecast().
 const STATIC_WEEKLY_RATES = {
   'FG 61737': 2079,
-  'FG 61739': 133,
-  'FG 61740': 110,
   'FG 62059': 72,
-  'FG 62060': 112,
-  'FG 62106': 128,
   'FG 62108': 191,
   'FG 62322': 194,
   'FG PerfectTed Vanilla Matcha Powder 75g': 0,
@@ -527,11 +523,7 @@ const STATIC_WEEKLY_RATES = {
 };
 const STATIC_COMMITTED = {
   'FG 61737': 2437,
-  'FG 61739': 184,
-  'FG 61740': 70,
   'FG 62059': 136,
-  'FG 62060': 0,
-  'FG 62106': 46,
   'FG 62108': 793,
   'FG 62322': 163,
   'FG PerfectTed Vanilla Matcha Powder 75g': 0,
