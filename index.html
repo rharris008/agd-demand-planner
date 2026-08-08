@@ -973,11 +973,12 @@ function renderPlan(){
   const fcast=buildForecast();
 
   // Tiles — use net available (SOH minus committed) for cover calculation
+  // Committed SOs are a national figure — only deduct from national view, not from individual state views
   let totalCrit=0,totalWarn=0,totalOk=0,orderNow=0,totalShort=0;
   skus.forEach(sku=>{
     const soh=getSoh(sku.code);
     const grossStock=STATE_VIEW==='qld'?soh.cartons_qld:STATE_VIEW==='nsw'?soh.cartons_nsw:(soh.cartons_qld+soh.cartons_nsw);
-    const committed=soh.committed_cartons||0;
+    const committed=STATE_VIEW==='national'?(soh.committed_cartons||0):0;
     const netAvail=grossStock-committed;
     const wkly=(fcast[sku.code]?.weekly_cartons||0);
     const cover=wkly>0?netAvail/wkly:null;
@@ -1025,7 +1026,8 @@ function renderPlan(){
   skus.forEach(sku=>{
     const soh=getSoh(sku.code);
     const grossStock=STATE_VIEW==='qld'?soh.cartons_qld:STATE_VIEW==='nsw'?soh.cartons_nsw:(soh.cartons_qld+soh.cartons_nsw);
-    const committed=soh.committed_cartons||0;
+    // Committed SOs are national-level — only deduct in national view so state views reconcile correctly
+    const committed=STATE_VIEW==='national'?(soh.committed_cartons||0):0;
     const netAvail=grossStock-committed;
     const isShort=netAvail<0;
     const wklyFcast=fcast[sku.code]?.weekly_cartons||0;
@@ -1086,8 +1088,9 @@ function renderPlan(){
       </td>
     </tr>`;
 
-    // Row 1: Opening stock (= net available, then prior week's closing)
-    html+=`<tr><td></td><td class="row-lbl" style="color:#333">Opening stock</td>`;
+    // Row 1: Opening stock (= net available for wk1, then prior week's closing)
+    // Label: "Net opening stock" to distinguish from Gross SOH shown in SOH tab
+    html+=`<tr><td></td><td class="row-lbl" style="color:#333">Net opening stock<span style="font-size:7pt;color:#999;display:block">(gross minus committed SOs)</span></td>`;
     wkData.forEach(w=>{
       const neg=w.opening<0;
       html+=`<td class="num" style="${neg?'color:#C0392B;font-weight:bold':''}">${neg?'('+n(Math.abs(w.opening))+')':n(w.opening)}</td>`;
