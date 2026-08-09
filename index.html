@@ -522,10 +522,11 @@ const STATIC_WEEKLY_RATES = {
   'FG PerfectTed - Juicy Peach 250ml': 0
 };
 const STATIC_COMMITTED = {
-  'FG 61737': 2437,
-  'FG 62059': 136,
-  'FG 62108': 793,
-  'FG 62322': 163,
+  // Updated 10/08/2026 — NS UoM is cartons (no division). Values = actual NS carton quantities.
+  'FG 61737': 32322,  // 5,387 stored × 6 carton_units (per Richard Carlick 10/08/2026)
+  'FG 62059': 0,
+  'FG 62108': 0,
+  'FG 62322': 0,
   'FG PerfectTed Vanilla Matcha Powder 75g': 0,
   'FG PerfectTed Strawberry Matcha Powder 75g': 0,
   'FG PerfectTed Original Matcha Powder 30g': 0,
@@ -1072,19 +1073,25 @@ function renderPlan(){
       ${fromDefault?'&nbsp;<span style="background:#555;color:#ccc;font-size:7.5pt;padding:1px 6px;border-radius:10px">est. rate</span>':''}
     </td></tr>`;
 
-    // Row 0: SOH position summary (static — spans all week columns)
+    // Row 0a: Gross SOH — separate row per Richard Carlick 10/08/2026
     html+=`<tr style="background:#fdf3f3">
       <td></td>
-      <td class="row-lbl" style="color:#C0392B;font-weight:bold">SOH position</td>
-      <td class="num" colspan="${weeks}" style="font-size:8pt;color:#444;text-align:left;padding-left:10px">
-        Gross SOH: <strong>${n(grossStock)}</strong> ctns &nbsp;|&nbsp;
-        Committed (open SOs): <strong style="color:${committed>0?'#C0392B':'#555'}">${n(committed)}</strong> ctns &nbsp;|&nbsp;
-        Net available: <strong style="color:${isShort?'#C0392B':'#27AE60'}">${isShort?'('+n(Math.abs(netAvail))+') SHORTFALL':n(netAvail)}</strong> ctns
+      <td class="row-lbl" style="color:#1B2A4A;font-weight:bold">Gross SOH</td>
+      <td class="num" colspan="${weeks}" style="color:#333;padding-left:10px">
+        <strong>${n(grossStock)}</strong> cartons
       </td>
-      <td rowspan="6" style="background:#f0f0f0;text-align:center;vertical-align:middle;font-size:8pt">
+      <td rowspan="7" style="background:#f0f0f0;text-align:center;vertical-align:middle;font-size:8pt">
         ${isShort?`<span style="color:var(--red);font-weight:bold">&#9888; SHORT<br>${n(Math.abs(netAvail))} ctns<br>unfulfilled</span>`:
           orderNowFlag?`<span style="color:var(--amber);font-weight:bold">&#9888; PLACE ORDER<br>Lead: ${sku_lead} wks</span>`:
           '<span style="color:var(--green)">OK</span>'}
+      </td>
+    </tr>`;
+    // Row 0b: Committed SOs — separate row per Richard Carlick 10/08/2026
+    html+=`<tr style="background:#fdf3f3">
+      <td></td>
+      <td class="row-lbl" style="color:#C0392B">Committed (SOs)</td>
+      <td class="num" colspan="${weeks}" style="color:${committed>0?'#C0392B':'#999'};padding-left:10px">
+        <strong>${committed>0?n(committed):'—'}</strong>${committed>0?' cartons':''}
       </td>
     </tr>`;
 
