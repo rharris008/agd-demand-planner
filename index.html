@@ -1122,7 +1122,7 @@ function renderPlan(){
     html+=`<tr style="background:#fdf3f3">
       <td></td>
       <td class="row-lbl" style="color:#1B2A4A;font-weight:bold">Gross SOH</td>
-      <td class="num" colspan="${weeks}" style="color:#333;padding-left:10px">
+      <td class="num" colspan="${weeks}" style="color:#333;padding-left:10px;text-align:left">
         <strong>${n(grossStock)}</strong> cartons
       </td>
       <td rowspan="8" style="background:#f0f0f0;text-align:center;vertical-align:middle;font-size:8pt">
@@ -1135,7 +1135,7 @@ function renderPlan(){
     html+=`<tr style="background:#fdf3f3">
       <td></td>
       <td class="row-lbl" style="color:#C0392B">Committed (SOs)</td>
-      <td class="num" colspan="${weeks}" style="color:${committed>0?'#C0392B':'#999'};padding-left:10px">
+      <td class="num" colspan="${weeks}" style="color:${committed>0?'#C0392B':'#999'};padding-left:10px;text-align:left">
         <strong>${committed>0?n(committed):'—'}</strong>${committed>0?' cartons':''}
       </td>
     </tr>`;
@@ -1144,7 +1144,7 @@ function renderPlan(){
     html+=`<tr style="background:#fdf3f3">
       <td></td>
       <td class="row-lbl" style="color:#27AE60;font-weight:bold">Net Opening Stock<span style="font-size:7pt;color:#999;display:block">= Gross SOH minus Committed</span></td>
-      <td class="num" colspan="${weeks}" style="color:${netNeg?'#C0392B':'#27AE60'};font-weight:bold;padding-left:10px">
+      <td class="num" colspan="${weeks}" style="color:${netNeg?'#C0392B':'#27AE60'};font-weight:bold;padding-left:10px;text-align:left">
         ${netNeg?'('+n(Math.abs(netAvail))+')':n(netAvail)} cartons
       </td>
     </tr>`;
