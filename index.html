@@ -536,6 +536,20 @@ const STATIC_COMMITTED = {
   'FG PerfectTed - Juicy Peach 250ml': 0
 };
 
+// QLD and NSW demand share — derived from NS Report 749 (subsidiary 46, Aug 2024 – Aug 2026)
+const NS_QLD_PCT = {
+  'FG PerfectTed - Apple Raspberry 250ml':    0.261,  // 2387 of 9155
+  'FG PerfectTed - Juicy Peach 250ml':        0.259,  // 2880 of 11101
+  'FG PerfectTed Matcha Latte Vanilla 250ml': 0.135,  // 640 of 4756
+  'FG PerfectTed Matcha Non Organic 250g':    0.001,  // 1 of 1896
+};
+const NS_NSW_PCT = {
+  'FG PerfectTed - Apple Raspberry 250ml':    0.259,  // 2368 of 9155
+  'FG PerfectTed - Juicy Peach 250ml':        0.276,  // 3060 of 11101
+  'FG PerfectTed Matcha Latte Vanilla 250ml': 0.434,  // 2066 of 4756
+  'FG PerfectTed Matcha Non Organic 250g':    0.999,  // 1895 of 1896
+};
+
 // ═══ STATE ═════════════════════════════════════════════════════════════════
 let SKUS=[], SOH=[], POS=[], SALES_HIST=[], PROMOS=[];
 let STATE_VIEW='national'; // national | nsw | qld
@@ -910,7 +924,12 @@ function buildForecast(){
     if(hist.length===0){
       // Fall back to SKU-level default, then static rates if DB column not yet present
       const base=((sku.default_weekly_cartons||0)||STATIC_WEEKLY_RATES[sku.code]||0)*GROWTH;
-      out[sku.code]={weekly_cartons:base,by_retailer:{},from_default:true};
+      out[sku.code]={
+        weekly_cartons:base,
+        weekly_cartons_qld:NS_QLD_PCT[sku.code]!=null?base*NS_QLD_PCT[sku.code]:null,
+        weekly_cartons_nsw:NS_NSW_PCT[sku.code]!=null?base*NS_NSW_PCT[sku.code]:null,
+        by_retailer:{},from_default:true
+      };
       return;
     }
     const retailers=[...new Set(hist.map(h=>h.retailer))];
@@ -922,9 +941,22 @@ function buildForecast(){
       const retTotal=retHist.reduce((s,h)=>s+(h.cartons_sold||0),0);
       byRetailer[ret]=(retTotal/52)*GROWTH;
     });
-    out[sku.code]={weekly_cartons:avgWeekly,by_retailer:byRetailer,from_default:false};
+    out[sku.code]={
+      weekly_cartons:avgWeekly,
+      weekly_cartons_qld:NS_QLD_PCT[sku.code]!=null?avgWeekly*NS_QLD_PCT[sku.code]:null,
+      weekly_cartons_nsw:NS_NSW_PCT[sku.code]!=null?avgWeekly*NS_NSW_PCT[sku.code]:null,
+      by_retailer:byRetailer,from_default:false
+    };
   });
   return out;
+}
+
+// Returns the demand rate for the current state view (QLD/NSW/national)
+function stateDemand(fe){
+  if(!fe)return 0;
+  if(STATE_VIEW==='qld'&&fe.weekly_cartons_qld!=null)return fe.weekly_cartons_qld;
+  if(STATE_VIEW==='nsw'&&fe.weekly_cartons_nsw!=null)return fe.weekly_cartons_nsw;
+  return fe.weekly_cartons||0;
 }
 
 function getPromoUplift(sku_code, weekIso){
@@ -956,8 +988,8 @@ function setStateView(view, btn){
   btn.classList.add('active');
   document.getElementById('state-mode-lbl').textContent=
     view==='national'?'National view':
-    view==='qld'?'QLD view (stock arriving Sept 2026 — POs active)':
-    'NSW view';
+    view==='qld'?'QLD view — demand from NS 2yr history':
+    'NSW view — demand from NS 2yr history';
   renderPlan();
 }
 
@@ -975,7 +1007,7 @@ function renderPlan(){
     const grossStock=STATE_VIEW==='qld'?soh.cartons_qld:STATE_VIEW==='nsw'?soh.cartons_nsw:(soh.cartons_qld+soh.cartons_nsw);
     const committed=STATE_VIEW==='national'?(soh.committed_cartons||0):0;
     const netAvail=grossStock-committed;
-    const wkly=(fcast[sku.code]?.weekly_cartons||0);
+    const wkly=stateDemand(fcast[sku.code]);
     const cover=wkly>0?netAvail/wkly:null;
     if(netAvail<0)totalShort++;
     else if(cover!==null&&cover<6)totalCrit++;
@@ -986,7 +1018,7 @@ function renderPlan(){
     let proj=Math.max(0,netAvail);
     for(let w=0;w<sku_lead;w++){
       const wkIso=isoDate(addWeeks(monday(),w));
-      const demand=(fcast[sku.code]?.weekly_cartons||0)+getPromoUplift(sku.code,wkIso);
+      const demand=stateDemand(fcast[sku.code])+getPromoUplift(sku.code,wkIso);
       proj+=getPOArrivals(sku.code,wkIso);
       proj-=demand;
     }
@@ -1025,7 +1057,7 @@ function renderPlan(){
     const committed=STATE_VIEW==='national'?(soh.committed_cartons||0):0;
     const netAvail=grossStock-committed;
     const isShort=netAvail<0;
-    const wklyFcast=fcast[sku.code]?.weekly_cartons||0;
+    const wklyFcast=stateDemand(fcast[sku.code]);
     const fromDefault=fcast[sku.code]?.from_default||false;
     const sku_lead=sku.lead_max_wks||16;
     const sku_safety=sku.safety_wks||SAFETY_DEFAULT;
@@ -1047,7 +1079,7 @@ function renderPlan(){
         let projected=Math.max(0,running);
         for(let j=1;j<=sku_lead&&i+j<weeks;j++){
           const fwk=wkCols[i+j];
-          const fd=(fcast[sku.code]?.weekly_cartons||0)+getPromoUplift(sku.code,fwk.iso);
+          const fd=stateDemand(fcast[sku.code])+getPromoUplift(sku.code,fwk.iso);
           const fa=getPOArrivals(sku.code,fwk.iso);
           projected=Math.max(0,projected+fa-fd);
         }
@@ -1099,7 +1131,8 @@ function renderPlan(){
     html+='</tr>';
 
     // Row 2: Forecast demand
-    html+=`<tr><td></td><td class="row-lbl" style="color:#555">Forecast demand${fromDefault?' <em style="color:#999;font-size:7pt">(est)</em>':''}</td>`;
+    const stateLbl=STATE_VIEW==='qld'?' <em style="color:#0E7CCE;font-size:7pt">(QLD — NS data)</em>':STATE_VIEW==='nsw'?' <em style="color:#0E7CCE;font-size:7pt">(NSW — NS data)</em>':'';
+    html+=`<tr><td></td><td class="row-lbl" style="color:#555">Forecast demand${fromDefault?' <em style="color:#999;font-size:7pt">(est)</em>':''}${stateLbl}</td>`;
     wkData.forEach(w=>{
       const hasPr=w.hasPromo;
       html+=`<td class="num ${hasPr?'promo-week':''}" style="color:${hasPr?'#7c5000':'#666'}">${wklyFcast>0?n(w.demand,1):'—'}</td>`;
