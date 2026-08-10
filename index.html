@@ -1118,20 +1118,20 @@ function renderPlan(){
       ${fromDefault?'&nbsp;<span style="background:#555;color:#ccc;font-size:7.5pt;padding:1px 6px;border-radius:10px">est. rate</span>':''}
     </td></tr>`;
 
-    // Row 0a: Gross SOH — separate row per Richard Carlick 10/08/2026
+    // Row 0a: Gross SOH — matches SOH tab "Total Cartons" column exactly
     html+=`<tr style="background:#fdf3f3">
       <td></td>
       <td class="row-lbl" style="color:#1B2A4A;font-weight:bold">Gross SOH</td>
       <td class="num" colspan="${weeks}" style="color:#333;padding-left:10px">
         <strong>${n(grossStock)}</strong> cartons
       </td>
-      <td rowspan="7" style="background:#f0f0f0;text-align:center;vertical-align:middle;font-size:8pt">
+      <td rowspan="8" style="background:#f0f0f0;text-align:center;vertical-align:middle;font-size:8pt">
         ${isShort?`<span style="color:var(--red);font-weight:bold">&#9888; SHORT<br>${n(Math.abs(netAvail))} ctns<br>unfulfilled</span>`:
           orderNowFlag?`<span style="color:var(--amber);font-weight:bold">&#9888; PLACE ORDER<br>Lead: ${sku_lead} wks</span>`:
           '<span style="color:var(--green)">OK</span>'}
       </td>
     </tr>`;
-    // Row 0b: Committed SOs — separate row per Richard Carlick 10/08/2026
+    // Row 0b: Committed SOs — matches SOH tab "Committed (SOs)" column exactly
     html+=`<tr style="background:#fdf3f3">
       <td></td>
       <td class="row-lbl" style="color:#C0392B">Committed (SOs)</td>
@@ -1139,10 +1139,18 @@ function renderPlan(){
         <strong>${committed>0?n(committed):'—'}</strong>${committed>0?' cartons':''}
       </td>
     </tr>`;
+    // Row 0c: Net Opening Stock — static snapshot = Gross SOH minus Committed; matches SOH tab "Net Available" exactly
+    const netNeg=netAvail<0;
+    html+=`<tr style="background:#fdf3f3">
+      <td></td>
+      <td class="row-lbl" style="color:#27AE60;font-weight:bold">Net Opening Stock<span style="font-size:7pt;color:#999;display:block">= Gross SOH minus Committed</span></td>
+      <td class="num" colspan="${weeks}" style="color:${netNeg?'#C0392B':'#27AE60'};font-weight:bold;padding-left:10px">
+        ${netNeg?'('+n(Math.abs(netAvail))+')':n(netAvail)} cartons
+      </td>
+    </tr>`;
 
-    // Row 1: Opening stock (= net available for wk1, then prior week's closing)
-    // Label: "Net opening stock" to distinguish from Gross SOH shown in SOH tab
-    html+=`<tr><td></td><td class="row-lbl" style="color:#333">Net opening stock<span style="font-size:7pt;color:#999;display:block">(gross minus committed SOs)</span></td>`;
+    // Row 1: Weekly rolling opening stock (wk1 = Net Opening Stock above; subsequent weeks = prior closing)
+    html+=`<tr><td></td><td class="row-lbl" style="color:#333">Opening stock<span style="font-size:7pt;color:#999;display:block">(weekly rolling balance)</span></td>`;
     wkData.forEach(w=>{
       const neg=w.opening<0;
       html+=`<td class="num" style="${neg?'color:#C0392B;font-weight:bold':''}">${neg?'('+n(Math.abs(w.opening))+')':n(w.opening)}</td>`;
