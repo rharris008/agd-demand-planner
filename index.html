@@ -47,7 +47,7 @@ select,input[type=text],input[type=date],input[type=number]{font-family:Arial,sa
 /* Grid table */
 .grid-wrap{padding:0 20px 28px;overflow-x:auto}
 .grid-tbl{border-collapse:collapse;font-size:8.5pt;min-width:1200px;width:100%}
-.grid-tbl th{background:var(--navy);color:var(--white);padding:5px 8px;white-space:nowrap;font-size:8pt;position:sticky;top:108px;z-index:50}
+.grid-tbl th{background:var(--navy);color:var(--white);padding:5px 8px;white-space:nowrap;font-size:8pt;position:sticky;top:0;z-index:50}
 .grid-tbl th.wk-hdr{background:#2c3e66;text-align:center;min-width:68px}
 .grid-tbl th.wk-hdr.alert-col{background:#7b1a14}
 .grid-tbl .sku-lbl{background:#2c3e66;color:var(--white);font-weight:bold;padding:5px 8px;border-top:2px solid var(--blue)}
@@ -1139,8 +1139,9 @@ function renderPlan(){
   document.getElementById('plan-grid').innerHTML=html;
 
   renderPlanAlertStrip();
-  // defer sticky calc until DOM has rendered
-  requestAnimationFrame(fixStickyOffsets);
+  // Two nested rAFs: first waits for grid paint, second waits for alert strip paint
+  // so fixStickyOffsets reads the correct bar.offsetHeight after both are in the DOM
+  requestAnimationFrame(()=>requestAnimationFrame(fixStickyOffsets));
 }
 
 // ═══ RENDER STOCK ══════════════════════════════════════════════════════════
