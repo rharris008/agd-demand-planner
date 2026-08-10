@@ -227,18 +227,15 @@ footer{text-align:center;font-size:8pt;color:#999;padding:16px;border-top:1px so
         <th class="num">Total Cartons</th>
         <th class="num" style="color:#ffaaaa">Committed (SOs)</th>
         <th class="num" style="color:#aaffcc">Net Available</th>
-        <th class="num">Total Units</th>
         <th>As At</th><th>Notes</th><th>Action</th>
       </tr></thead>
-      <tbody id="stock-tbody"><tr><td colspan="12" class="loading"><span class="spin"></span>Loading…</td></tr></tbody>
+      <tbody id="stock-tbody"><tr><td colspan="11" class="loading"><span class="spin"></span>Loading…</td></tr></tbody>
       <tfoot><tr>
         <td colspan="3"><strong>TOTAL</strong></td>
         <td class="num" id="soh-tot-qld">—</td>
         <td class="num" id="soh-tot-nsw">—</td>
         <td class="num" id="soh-tot-nat">—</td>
-        <td colspan="2"></td>
-        <td class="num" id="soh-tot-units">—</td>
-        <td colspan="3"></td>
+        <td colspan="5"></td>
       </tr></tfoot>
     </table>
   </div>
@@ -1205,15 +1202,15 @@ function renderPlan(){
 
 // ═══ RENDER STOCK ══════════════════════════════════════════════════════════
 function renderStock(){
-  let html='';let totQld=0,totNsw=0,totUnits=0,totCommitted=0;
+  // Updated 10/08/2026 — units column removed; all quantities in cartons per Richard Carlick
+  let html='';let totQld=0,totNsw=0,totCommitted=0;
   SKUS.forEach(sku=>{
     const soh=getSoh(sku.code);
     const nat=(soh.cartons_qld||0)+(soh.cartons_nsw||0);
     const committed=soh.committed_cartons||0;
     const netAvail=nat-committed;
-    const units=nat*(sku.carton_units||6);
     const isShort=netAvail<0;
-    totQld+=soh.cartons_qld||0;totNsw+=soh.cartons_nsw||0;totUnits+=units;totCommitted+=committed;
+    totQld+=soh.cartons_qld||0;totNsw+=soh.cartons_nsw||0;totCommitted+=committed;
     html+=`<tr style="${isShort?'background:#fdecea':''}">
       <td>${sku.code}</td><td>${sku.description}</td>
       <td><span class="badge ${sku.brand==='Oatly'?'badge-ok':'badge-warn'}">${sku.brand}</span></td>
@@ -1222,17 +1219,15 @@ function renderStock(){
       <td class="num"><strong>${n(nat)}</strong></td>
       <td class="num" style="color:${committed>0?'#C0392B':'#999'}">${committed>0?n(committed):'—'}</td>
       <td class="num" style="color:${isShort?'#C0392B':'#27AE60'};font-weight:bold">${isShort?'('+n(Math.abs(netAvail))+')':n(netAvail)}</td>
-      <td class="num">${n(units)}</td>
       <td>${fmtDate(soh.as_at_date)}</td>
       <td style="font-size:8pt;color:#888">${soh.notes||''}</td>
       <td><button class="btn btn-grey" style="font-size:8pt;padding:3px 8px" onclick="editSoh('${sku.code}')">Edit</button></td>
     </tr>`;
   });
-  document.getElementById('stock-tbody').innerHTML=html||'<tr><td colspan="12" style="padding:20px;color:#888;text-align:center">No stock data. Add via Setup.</td></tr>';
+  document.getElementById('stock-tbody').innerHTML=html||'<tr><td colspan="11" style="padding:20px;color:#888;text-align:center">No stock data. Add via Setup.</td></tr>';
   document.getElementById('soh-tot-qld').textContent=n(totQld);
   document.getElementById('soh-tot-nsw').textContent=n(totNsw);
   document.getElementById('soh-tot-nat').textContent=n(totQld+totNsw);
-  document.getElementById('soh-tot-units').textContent=n(totUnits);
 }
 
 function editSoh(sku_code){
@@ -1724,9 +1719,8 @@ function renderPlannedOrders(){
 
   const el=document.getElementById('planned-summary');
   if(el){
-    const totalUnits=rows.reduce((s,r)=>s+(r.units||0),0);
     const totalCtns=rows.reduce((s,r)=>s+parseFloat(r.cartons||0),0);
-    el.textContent=`${n(rows.length)} delivery lines | ${n(totalUnits)} units | ${n(Math.round(totalCtns))} cartons`;
+    el.textContent=`${n(rows.length)} delivery lines | ${n(Math.round(totalCtns))} cartons`;
   }
 
   if(!rows.length){
@@ -1734,9 +1728,10 @@ function renderPlannedOrders(){
     return;
   }
 
+  // Updated 10/08/2026 — units column removed; all quantities in cartons per Richard Carlick
   let html='<table class="dt"><thead><tr>';
-  ['Retailer','SKU Code','SKU Name','Delivery Date','Units','Cartons','Grid Week','Source'].forEach((h,i)=>{
-    html+=`<th style="font-family:Arial,sans-serif;font-size:9pt${i>=4&&i<=5?';text-align:right':''}">${h}</th>`;
+  ['Retailer','SKU Code','SKU Name','Delivery Date','Cartons','Grid Week','Source'].forEach((h,i)=>{
+    html+=`<th style="font-family:Arial,sans-serif;font-size:9pt${i===4?';text-align:right':''}">${h}</th>`;
   });
   html+='</tr></thead><tbody>';
 
@@ -1749,7 +1744,6 @@ function renderPlannedOrders(){
       <td style="font-family:Arial,sans-serif;font-size:9pt"><code>${r.sku_code}</code></td>
       <td style="font-family:Arial,sans-serif;font-size:9pt">${r.sku_name||'-'}</td>
       <td style="font-family:Arial,sans-serif;font-size:9pt">${dFmt}</td>
-      <td class="num" style="font-family:Arial,sans-serif;font-size:9pt">${n(r.units)}</td>
       <td class="num" style="font-family:Arial,sans-serif;font-size:9pt">${n(parseFloat(r.cartons||0),1)}</td>
       <td style="font-family:Arial,sans-serif;font-size:9pt;color:#0E7CCE">w/c ${wFmt}</td>
       <td style="font-family:Arial,sans-serif;font-size:9pt;color:#888">${r.source_file||'-'}</td>
