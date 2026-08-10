@@ -162,6 +162,7 @@ footer{text-align:center;font-size:8pt;color:#999;padding:16px;border-top:1px so
   <button class="tab" onclick="showTab('forecast',this)">Retailer Forecast</button>
   <button class="tab" onclick="showTab('promo',this)">Promo Calendar</button>
   <button class="tab" onclick="showTab('master',this)">SKU Master</button>
+  <button class="tab" onclick="showTab('planned',this)">Planned Orders</button>
 </div>
 
 <div id="setup-banner" class="banner err" style="display:none">
@@ -554,7 +555,7 @@ const NS_NSW_PCT = {
 };
 
 // ═══ STATE ═════════════════════════════════════════════════════════════════
-let SKUS=[], SOH=[], POS=[], SALES_HIST=[], PROMOS=[];
+let SKUS=[], SOH=[], POS=[], SALES_HIST=[], PROMOS=[], PLANNED_ORDERS=[];
 let STATE_VIEW='national'; // national | nsw | qld
 let db_ok = false;
 
@@ -597,12 +598,13 @@ async function sbDelete(table, filter){
 async function loadAll(){
   spin(true);
   try {
-    [SKUS,SOH,POS,SALES_HIST,PROMOS] = await Promise.all([
+    [SKUS,SOH,POS,SALES_HIST,PROMOS,PLANNED_ORDERS] = await Promise.all([
       sbGet('agd_skus','select=*&order=brand,description&active=eq.true'),
       sbGet('agd_stock_on_hand','select=*'),
       sbGet('agd_purchase_orders','select=*&order=eta_date'),
       sbGet('agd_sales_history','select=*&order=week_date'),
       sbGet('agd_promos','select=*&order=promo_week'),
+      sbGet('agd_retailer_planned_orders','select=*&order=sku_code,delivery_date'),
     ]);
     // Exclude POs marked Pending Billing — goods received in NS, awaiting vendor bill.
     // These should not appear in the tracker at all (not in display, totals, or planning).
@@ -654,6 +656,7 @@ function renderAll(){
   renderForecast();
   renderPromo();
   renderSkuMaster();
+  renderPlannedOrders();
 }
 
 // ═══ ALERTS ENGINE ═════════════════════════════════════════════════════════
@@ -1076,7 +1079,8 @@ function renderPlan(){
     wkCols.forEach((wk,i)=>{
       const opening=running; // capture opening stock before this week's movement
       const promo=getPromoUplift(sku.code,wk.iso);
-      const demand=wklyFcast+promo;
+      const plannedCtns=getPlannedCartons(sku.code,wk.iso);
+      const demand=plannedCtns>0?plannedCtns:(wklyFcast+promo);
       const arrivals=getPOArrivals(sku.code,wk.iso);
       running=running+arrivals-demand;
       const cover=wklyFcast>0?running/wklyFcast:null; // null = no rate, not ∞
@@ -1093,7 +1097,7 @@ function renderPlan(){
         if(projCover!==null&&projCover<sku_safety){orderNowFlag=true;}
       }
 
-      wkData.push({opening,demand,arrivals,closing:running,cover,hasPromo:promo>0});
+      wkData.push({opening,demand,arrivals,closing:running,cover,hasPromo:promo>0,plannedCtns});
     });
 
     // SKU header row
@@ -1136,12 +1140,16 @@ function renderPlan(){
     });
     html+='</tr>';
 
-    // Row 2: Forecast demand
+    // Row 2: Forecast demand (blue bold = from planned orders; grey = computed forecast rate)
     const stateLbl=STATE_VIEW==='qld'?' <em style="color:#0E7CCE;font-size:7pt">(QLD — NS data)</em>':STATE_VIEW==='nsw'?' <em style="color:#0E7CCE;font-size:7pt">(NSW — NS data)</em>':'';
-    html+=`<tr><td></td><td class="row-lbl" style="color:#555">Forecast demand${fromDefault?' <em style="color:#999;font-size:7pt">(est)</em>':''}${stateLbl}</td>`;
-    wkData.forEach(w=>{
-      const hasPr=w.hasPromo;
-      html+=`<td class="num ${hasPr?'promo-week':''}" style="color:${hasPr?'#7c5000':'#666'}">${wklyFcast>0?n(w.demand,1):'—'}</td>`;
+    html+=`<tr><td></td><td class="row-lbl" style="color:#555">Forecast demand${fromDefault?' <em style="color:#999;font-size:7pt">(est)</em>':''}${stateLbl} <em style="color:#0E7CCE;font-size:7pt">(blue = retailer order)</em></td>`;
+    wkData.forEach((w,wi)=>{
+      if(w.plannedCtns>0){
+        html+=`<td class="num" style="color:#0E7CCE;font-weight:bold" title="${n(w.plannedCtns,1)} ctns — retailer order">${n(w.plannedCtns,1)}</td>`;
+      } else {
+        const hasPr=w.hasPromo;
+        html+=`<td class="num ${hasPr?'promo-week':''}" style="color:${hasPr?'#7c5000':'#666'}">${wklyFcast>0?n(w.demand,1):'—'}</td>`;
+      }
     });
     html+='</tr>';
 
@@ -1673,6 +1681,91 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('soh-date').value=new Date().toISOString().slice(0,10);
   loadAll();
 });
+
+// ═══ PLANNED ORDERS HELPERS ════════════════════════════════════════════════
+function getWeekMonday(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const day=d.getDay();
+  const diff=day===0?-6:(1-day);
+  d.setDate(d.getDate()+diff);
+  return isoDate(d);
+}
+
+function getPlannedCartons(sku_code,week_iso){
+  return PLANNED_ORDERS
+    .filter(r=>r.sku_code===sku_code&&getWeekMonday(r.delivery_date)===week_iso)
+    .reduce((s,r)=>s+parseFloat(r.cartons||0),0);
+}
+
+function renderPlannedOrders(){
+  if(!db_ok) return;
+  const retailers=[...new Set(PLANNED_ORDERS.map(r=>r.retailer))].sort();
+  const rf=document.getElementById('planned-retailer-filter');
+  if(rf){
+    const cur=rf.value;
+    rf.innerHTML='<option value="all">All Retailers</option>'+retailers.map(r=>`<option value="${r}">${r}</option>`).join('');
+    if(cur&&retailers.includes(cur))rf.value=cur;
+  }
+  const filterRet=rf?rf.value:'all';
+  const rows=PLANNED_ORDERS.filter(r=>filterRet==='all'||r.retailer===filterRet);
+
+  const el=document.getElementById('planned-summary');
+  if(el){
+    const totalUnits=rows.reduce((s,r)=>s+(r.units||0),0);
+    const totalCtns=rows.reduce((s,r)=>s+parseFloat(r.cartons||0),0);
+    el.textContent=`${n(rows.length)} delivery lines | ${n(totalUnits)} units | ${n(Math.round(totalCtns))} cartons`;
+  }
+
+  if(!rows.length){
+    document.getElementById('planned-grid').innerHTML='<p style="color:#888;font-size:9pt;font-family:Arial,sans-serif">No planned orders loaded yet.</p>';
+    return;
+  }
+
+  let html='<table class="dt"><thead><tr>';
+  ['Retailer','SKU Code','SKU Name','Delivery Date','Units','Cartons','Grid Week','Source'].forEach((h,i)=>{
+    html+=`<th style="font-family:Arial,sans-serif;font-size:9pt${i>=4&&i<=5?';text-align:right':''}">${h}</th>`;
+  });
+  html+='</tr></thead><tbody>';
+
+  rows.forEach(r=>{
+    const wkMon=getWeekMonday(r.delivery_date);
+    const dFmt=r.delivery_date?r.delivery_date.slice(8,10)+'/'+r.delivery_date.slice(5,7):'-';
+    const wFmt=wkMon?wkMon.slice(8,10)+'/'+wkMon.slice(5,7):'-';
+    html+=`<tr>
+      <td style="font-family:Arial,sans-serif;font-size:9pt">${r.retailer}</td>
+      <td style="font-family:Arial,sans-serif;font-size:9pt"><code>${r.sku_code}</code></td>
+      <td style="font-family:Arial,sans-serif;font-size:9pt">${r.sku_name||'-'}</td>
+      <td style="font-family:Arial,sans-serif;font-size:9pt">${dFmt}</td>
+      <td class="num" style="font-family:Arial,sans-serif;font-size:9pt">${n(r.units)}</td>
+      <td class="num" style="font-family:Arial,sans-serif;font-size:9pt">${n(parseFloat(r.cartons||0),1)}</td>
+      <td style="font-family:Arial,sans-serif;font-size:9pt;color:#0E7CCE">w/c ${wFmt}</td>
+      <td style="font-family:Arial,sans-serif;font-size:9pt;color:#888">${r.source_file||'-'}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('planned-grid').innerHTML=html;
+}
+
 </script>
+
+<!-- ═══ TAB 8: PLANNED ORDERS ══════════════════════════════════════════════ -->
+<div id="pane-planned" class="pane">
+  <div class="sec-hdr" style="display:flex;align-items:center;gap:12px">
+    Retailer Planned Orders
+    <span id="planned-summary" style="font-size:9pt;font-weight:normal;color:#555"></span>
+  </div>
+  <p style="font-size:9pt;color:#555;margin:0 0 12px">
+    Planned orders from retailer schedules. Weeks with orders show in <strong style="color:#0E7CCE">blue</strong>
+    on the Planning Grid Forecast Demand row. Weeks without orders use the computed forecast rate.
+  </p>
+  <div style="margin-bottom:8px">
+    <label style="font-size:9pt;font-family:Arial,sans-serif">Retailer:
+      <select id="planned-retailer-filter" onchange="renderPlannedOrders()" style="font-size:9pt;margin-left:4px;font-family:Arial,sans-serif">
+        <option value="all">All Retailers</option>
+      </select>
+    </label>
+  </div>
+  <div id="planned-grid"></div>
+</div>
 </body>
 </html>
