@@ -874,9 +874,21 @@ function fixStickyOffsets(){
   if(!hdr||!tabs||!bar)return;
   const tabBottom=hdr.offsetHeight+tabs.offsetHeight;
   bar.style.top=tabBottom+'px';
-  // Grid headers must sit below the sticky bar
-  const gridTop=tabBottom+bar.offsetHeight;
-  document.querySelectorAll('.grid-tbl th').forEach(th=>th.style.top=gridTop+'px');
+  // Fix sticky header row — grid-wrap must have a fixed max-height with overflow-y:auto
+  // so that position:sticky on th works within its scroll container (overflow-x:auto
+  // on the parent creates a scroll context; without a Y overflow the sticky never fires)
+  const wrap=document.querySelector('.grid-wrap');
+  if(wrap){
+    const alertStrip=document.getElementById('plan-alert-strip');
+    const alertH=alertStrip?alertStrip.offsetHeight:0;
+    const secHdr=document.querySelector('#pane-plan .sec-hdr');
+    const secHdrH=secHdr?secHdr.offsetHeight:28;
+    const wrapTop=tabBottom+bar.offsetHeight+alertH+secHdrH+4;
+    wrap.style.maxHeight=(window.innerHeight-wrapTop-20)+'px';
+    wrap.style.overflowY='auto';
+  }
+  // th top:0 — sticky relative to the grid-wrap scroll container
+  document.querySelectorAll('.grid-tbl th').forEach(th=>th.style.top='0');
   document.querySelectorAll('.dt thead th').forEach(th=>th.style.top=tabBottom+'px');
 }
 
@@ -1680,6 +1692,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('agd-logo').src=LOGO;
   document.getElementById('soh-date').value=new Date().toISOString().slice(0,10);
   loadAll();
+  window.addEventListener('resize',fixStickyOffsets);
 });
 
 // ═══ PLANNED ORDERS HELPERS ════════════════════════════════════════════════
