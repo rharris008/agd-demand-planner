@@ -379,7 +379,7 @@ footer{text-align:center;font-size:8pt;color:#999;padding:16px;border-top:1px so
       <div class="f"><label>Supplier</label><input type="text" id="po-supplier" placeholder="e.g. Oatly EMEA AB"></div>
       <div class="f"><label>Status</label>
         <select id="po-status" style="width:100%">
-          <option>Placed</option><option>On Water</option><option>Arrived</option><option>Cancelled</option>
+          <option>Placed</option><option>On Water</option><option>Arrived</option><option>Cancelled</option><option>Pending Billing</option>
         </select>
       </div>
     </div>
@@ -604,6 +604,9 @@ async function loadAll(){
       sbGet('agd_sales_history','select=*&order=week_date'),
       sbGet('agd_promos','select=*&order=promo_week'),
     ]);
+    // Exclude POs marked Pending Billing — goods received in NS, awaiting vendor bill.
+    // These should not appear in the tracker at all (not in display, totals, or planning).
+    POS = POS.filter(p => p.status !== 'Pending Billing');
     db_ok=true;
     document.getElementById('setup-banner').style.display='none';
     populateSelects();
