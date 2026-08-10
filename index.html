@@ -353,6 +353,9 @@ footer{text-align:center;font-size:8pt;color:#999;padding:16px;border-top:1px so
       <div class="f"><label>NSW Cartons</label><input type="number" id="soh-nsw" min="0" value="0"></div>
     </div>
     <div class="form-row">
+      <div class="f"><label>Committed (SOs) Cartons</label><input type="number" id="soh-committed" min="0" value="0" placeholder="Open sales order qty"></div>
+    </div>
+    <div class="form-row">
       <div class="f"><label>As at Date</label><input type="date" id="soh-date"></div>
       <div class="f"><label>Notes</label><input type="text" id="soh-notes" placeholder="e.g. NS extract 07/08/2026"></div>
     </div>
@@ -1215,6 +1218,7 @@ function editSoh(sku_code){
   document.getElementById('soh-sku').value=sku_code;
   document.getElementById('soh-qld').value=soh.cartons_qld||0;
   document.getElementById('soh-nsw').value=soh.cartons_nsw||0;
+  document.getElementById('soh-committed').value=soh.committed_cartons||0;
   document.getElementById('soh-date').value=isoDate(soh.as_at_date||new Date());
   document.getElementById('soh-notes').value=soh.notes||'';
   openModal('modal-soh');
@@ -1227,6 +1231,7 @@ async function saveSoh(){
     sku_code,
     cartons_qld:parseInt(document.getElementById('soh-qld').value)||0,
     cartons_nsw:parseInt(document.getElementById('soh-nsw').value)||0,
+    committed_cartons:parseInt(document.getElementById('soh-committed').value)||0,
     as_at_date:document.getElementById('soh-date').value,
     notes:document.getElementById('soh-notes').value,
     updated_at:new Date().toISOString()
