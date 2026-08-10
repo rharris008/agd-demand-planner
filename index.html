@@ -951,19 +951,13 @@ function getPOArrivals(sku_code, weekIso){
 
 // ═══ RENDER PLAN ═══════════════════════════════════════════════════════════
 function setStateView(view, btn){
-  const afterSplit=new Date()>=new Date(STATE_SPLIT_DATE);
-  // QLD stock not held until Sept 2026 — block early selection
-  if(view==='qld'&&!afterSplit){
-    showBanner('QLD stock split activates 1 September 2026. All stock is currently held in NSW.','info');
-    return;
-  }
   STATE_VIEW=view;
   document.querySelectorAll('.state-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('state-mode-lbl').textContent=
-    view==='national'?'National view (all stock in NSW until Sept 2026)':
-    view==='qld'?'QLD view':
-    'NSW / National view';
+    view==='national'?'National view':
+    view==='qld'?'QLD view (stock arriving Sept 2026 — POs active)':
+    'NSW view';
   renderPlan();
 }
 
