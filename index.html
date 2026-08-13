@@ -163,6 +163,7 @@ footer{text-align:center;font-size:8pt;color:#999;padding:16px;border-top:1px so
   <button class="tab" onclick="showTab('promo',this)">Promo Calendar</button>
   <button class="tab" onclick="showTab('master',this)">SKU Master</button>
   <button class="tab" onclick="showTab('planned',this)">Planned Orders</button>
+  <button class="tab" onclick="showTab('open-so',this)">Open Sales Orders</button>
 </div>
 
 <div id="setup-banner" class="banner err" style="display:none">
@@ -552,7 +553,7 @@ const NS_NSW_PCT = {
 };
 
 // ═══ STATE ═════════════════════════════════════════════════════════════════
-let SKUS=[], SOH=[], POS=[], SALES_HIST=[], PROMOS=[], PLANNED_ORDERS=[];
+let SKUS=[], SOH=[], POS=[], SALES_HIST=[], PROMOS=[], PLANNED_ORDERS=[], OPEN_SOS=[];
 let STATE_VIEW='national'; // national | nsw | qld
 let db_ok = false;
 
@@ -595,13 +596,14 @@ async function sbDelete(table, filter){
 async function loadAll(){
   spin(true);
   try {
-    [SKUS,SOH,POS,SALES_HIST,PROMOS,PLANNED_ORDERS] = await Promise.all([
+    [SKUS,SOH,POS,SALES_HIST,PROMOS,PLANNED_ORDERS,OPEN_SOS] = await Promise.all([
       sbGet('agd_skus','select=*&order=brand,description&active=eq.true'),
       sbGet('agd_stock_on_hand','select=*'),
       sbGet('agd_purchase_orders','select=*&order=eta_date'),
       sbGet('agd_sales_history','select=*&order=week_date'),
       sbGet('agd_promos','select=*&order=promo_week'),
       sbGet('agd_retailer_planned_orders','select=*&order=sku_code,delivery_date'),
+      sbGet('agd_open_sales_orders','select=*&order=expected_ship_date.nullslast,so_number'),
     ]);
     // Exclude POs marked Pending Billing — goods received in NS, awaiting vendor bill.
     // These should not appear in the tracker at all (not in display, totals, or planning).
@@ -654,6 +656,7 @@ function renderAll(){
   renderPromo();
   renderSkuMaster();
   renderPlannedOrders();
+  renderOpenSO();
 }
 
 // ═══ ALERTS ENGINE ═════════════════════════════════════════════════════════
@@ -1761,6 +1764,88 @@ function renderPlannedOrders(){
   document.getElementById('planned-grid').innerHTML=html;
 }
 
+// ═══ RENDER OPEN SALES ORDERS ══════════════════════════════════════════════
+function renderOpenSO(){
+  const sfEl=document.getElementById('so-status-filter');
+  const skuEl=document.getElementById('so-sku-filter');
+  const custEl=document.getElementById('so-customer-filter');
+  const sf=sfEl?sfEl.value:'all';
+  const skuF=skuEl?skuEl.value:'all';
+  const custF=custEl?custEl.value:'all';
+
+  let rows=OPEN_SOS.filter(r=>
+    (sf==='all'||r.status===sf)&&
+    (skuF==='all'||r.sku_code===skuF)&&
+    (custF==='all'||r.customer===custF)
+  );
+
+  const today=new Date();
+
+  // Summary tiles
+  const totOrd=OPEN_SOS.reduce((s,r)=>s+(r.qty_ordered||0),0);
+  const totRem=OPEN_SOS.reduce((s,r)=>s+(r.qty_remaining||0),0);
+  const overdueCount=OPEN_SOS.filter(r=>r.expected_ship_date&&new Date(r.expected_ship_date)<today).length;
+  const dueWeekCount=OPEN_SOS.filter(r=>r.expected_ship_date&&new Date(r.expected_ship_date)>=today&&(new Date(r.expected_ship_date)-today)/(7*86400000)<=1).length;
+
+  const soTilesEl=document.getElementById('so-tiles');
+  if(soTilesEl){
+    soTilesEl.innerHTML=`
+      <div class="tile blue"><div class="tile-lbl">Open Orders</div><div class="tile-val">${OPEN_SOS.length}</div><div class="tile-sub">sales orders</div></div>
+      <div class="tile"><div class="tile-lbl">Units Ordered</div><div class="tile-val">${n(totOrd)}</div><div class="tile-sub">total on open SOs</div></div>
+      <div class="tile"><div class="tile-lbl">Units Remaining</div><div class="tile-val">${n(totRem)}</div><div class="tile-sub">unfulfilled</div></div>
+      <div class="tile ${overdueCount>0?'red':'green'}"><div class="tile-lbl">Overdue</div><div class="tile-val">${overdueCount}</div><div class="tile-sub">past expected ship date</div></div>
+      <div class="tile ${dueWeekCount>0?'amber':'green'}"><div class="tile-lbl">Due This Week</div><div class="tile-val">${dueWeekCount}</div><div class="tile-sub">ship within 7 days</div></div>
+    `;
+  }
+
+  // Populate filter dropdowns (first render only — avoid resetting user selection)
+  if(custEl&&custEl.options.length<=1){
+    const custs=[...new Set(OPEN_SOS.map(r=>r.customer).filter(Boolean))].sort();
+    custs.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;custEl.appendChild(o);});
+  }
+  if(skuEl&&skuEl.options.length<=1){
+    const skus=[...new Set(OPEN_SOS.map(r=>r.sku_code).filter(Boolean))].sort();
+    skus.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;skuEl.appendChild(o);});
+  }
+
+  // Table body
+  const tbody=document.getElementById('so-tbody');
+  if(!tbody)return;
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="8" style="padding:24px;text-align:center;color:#888">No open sales orders. Data syncs daily via NetSuite.</td></tr>';
+    document.getElementById('so-tot-ord').textContent='—';
+    document.getElementById('so-tot-rem').textContent='—';
+    return;
+  }
+
+  let html='';
+  rows.forEach(r=>{
+    const sd=r.expected_ship_date?new Date(r.expected_ship_date):null;
+    const daysOut=sd?Math.round((sd-today)/86400000):null;
+    const overdue=daysOut!==null&&daysOut<0;
+    const soon=daysOut!==null&&daysOut>=0&&daysOut<=7;
+    const statusCls=r.status==='Pending Fulfillment'?'badge-warn':'badge-ok';
+    const dateStyle=overdue?'color:var(--red);font-weight:bold':soon?'color:var(--amber);font-weight:bold':'';
+    const shipFmt=sd?sd.getDate().toString().padStart(2,'0')+'/'+(sd.getMonth()+1).toString().padStart(2,'0')+'/'+sd.getFullYear():'—';
+    const daysLabel=daysOut!==null?(overdue?'('+Math.abs(daysOut)+' days overdue)':(daysOut===0?'(today)':'('+daysOut+'d)')):'';
+    html+=`<tr>
+      <td style="font-family:Arial,sans-serif;font-size:9pt"><strong>${r.so_number}</strong></td>
+      <td style="font-family:Arial,sans-serif;font-size:9pt">${r.customer||'—'}</td>
+      <td style="font-family:Arial,sans-serif;font-size:9pt"><code>${r.sku_code}</code><br><span style="font-size:8pt;color:#888">${r.sku_name||''}</span></td>
+      <td class="num" style="font-family:Arial,sans-serif;font-size:9pt">${n(r.qty_ordered)}</td>
+      <td class="num" style="font-family:Arial,sans-serif;font-size:9pt;${r.qty_remaining>0?'font-weight:bold':''}">${n(r.qty_remaining)}</td>
+      <td style="font-family:Arial,sans-serif;font-size:9pt;${dateStyle}">${shipFmt} <span style="font-size:8pt;color:inherit">${daysLabel}</span></td>
+      <td style="font-family:Arial,sans-serif;font-size:9pt"><span class="badge ${statusCls}">${r.status}</span></td>
+      <td style="font-family:Arial,sans-serif;font-size:8pt;color:#888">${r.updated_at?r.updated_at.slice(0,10):''}</td>
+    </tr>`;
+  });
+  tbody.innerHTML=html;
+
+  const filtActive=rows.filter(r=>r.qty_remaining>0);
+  document.getElementById('so-tot-ord').textContent=n(filtActive.reduce((s,r)=>s+(r.qty_ordered||0),0));
+  document.getElementById('so-tot-rem').textContent=n(filtActive.reduce((s,r)=>s+(r.qty_remaining||0),0));
+}
+
 </script>
 
 <!-- ═══ TAB 8: PLANNED ORDERS ══════════════════════════════════════════════ -->
@@ -1781,6 +1866,52 @@ function renderPlannedOrders(){
     </label>
   </div>
   <div id="planned-grid"></div>
+</div>
+
+<!-- ═══ TAB 9: OPEN SALES ORDERS ══════════════════════════════════════════ -->
+<div id="pane-open-so" class="pane">
+  <div class="filter-bar">
+    <label style="font-family:Arial,sans-serif;font-size:9pt">Status:
+      <select id="so-status-filter" onchange="renderOpenSO()" style="font-family:Arial,sans-serif;font-size:9pt">
+        <option value="all">All</option>
+        <option value="Pending Fulfillment">Pending Fulfillment</option>
+        <option value="Partially Billed">Partially Billed</option>
+      </select>
+    </label>
+    <label style="font-family:Arial,sans-serif;font-size:9pt">SKU:
+      <select id="so-sku-filter" onchange="renderOpenSO()" style="font-family:Arial,sans-serif;font-size:9pt">
+        <option value="all">All SKUs</option>
+      </select>
+    </label>
+    <label style="font-family:Arial,sans-serif;font-size:9pt">Customer:
+      <select id="so-customer-filter" onchange="renderOpenSO()" style="font-family:Arial,sans-serif;font-size:9pt">
+        <option value="all">All Customers</option>
+      </select>
+    </label>
+    <span style="font-size:8pt;color:#888;font-family:Arial,sans-serif">Synced daily from NetSuite (AGD subsidiary, Pending Fulfillment and Partially Billed). Sorted by Expected Ship Date.</span>
+  </div>
+  <div class="tiles" id="so-tiles"></div>
+  <div class="dt-wrap">
+    <table class="dt">
+      <thead><tr>
+        <th style="font-family:Arial,sans-serif;font-size:8.5pt">SO Number</th>
+        <th style="font-family:Arial,sans-serif;font-size:8.5pt">Customer</th>
+        <th style="font-family:Arial,sans-serif;font-size:8.5pt">SKU</th>
+        <th class="num" style="font-family:Arial,sans-serif;font-size:8.5pt">Qty Ordered</th>
+        <th class="num" style="font-family:Arial,sans-serif;font-size:8.5pt">Qty Remaining</th>
+        <th style="font-family:Arial,sans-serif;font-size:8.5pt">Expected Ship Date</th>
+        <th style="font-family:Arial,sans-serif;font-size:8.5pt">Status</th>
+        <th style="font-family:Arial,sans-serif;font-size:8.5pt">Last Synced</th>
+      </tr></thead>
+      <tbody id="so-tbody"><tr><td colspan="8" class="loading"><span class="spin"></span>Loading…</td></tr></tbody>
+      <tfoot><tr>
+        <td colspan="3" style="font-family:Arial,sans-serif;font-size:9pt"><strong>FILTERED TOTAL (unfulfilled)</strong></td>
+        <td class="num" id="so-tot-ord" style="font-family:Arial,sans-serif;font-size:9pt;font-weight:bold">—</td>
+        <td class="num" id="so-tot-rem" style="font-family:Arial,sans-serif;font-size:9pt;font-weight:bold">—</td>
+        <td colspan="3"></td>
+      </tr></tfoot>
+    </table>
+  </div>
 </div>
 </body>
 </html>
