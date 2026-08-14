@@ -1097,7 +1097,7 @@ function renderPlan(){
       const arrivals=getPOArrivals(sku.code,wk.iso);
       running=running+arrivals-demand;
       demandOnlyCover=Math.max(0,demandOnlyCover-demand); // deplete by demand only, not replenished by POs
-      const cover=wklyFcast>0?demandOnlyCover/wklyFcast:null; // null = no rate, not ∞
+      const cover=demand>0?opening/demand:null; // weeks cover = opening SOH / this week's demand — matches standard formula (Richard Carlick 14/08/2026)
 
       if(i===0){
         let projected=Math.max(0,running);
